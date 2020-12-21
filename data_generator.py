@@ -79,8 +79,6 @@ class DataGenerator:
         self._generate_from(key, random_value, data)
 
     def _generate_from_dict(self, key, model, data):
-        # TODO: Add {field}={value} conditional
-
         match = self._conditional_regex.match(key)
         if match:
             groups = match.groupdict()
@@ -90,6 +88,7 @@ class DataGenerator:
             if field is not None and (condition is None or condition == field):
                 for inner_key, inner_val in model.items():
                     self._generate_from(inner_key, inner_val, data)
+
 
 def main():
     if len(sys.argv) != 3:
