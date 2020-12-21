@@ -1,2 +1,2 @@
 # data_generator
-Abstract data generation library
+Arbitrary data generation library
