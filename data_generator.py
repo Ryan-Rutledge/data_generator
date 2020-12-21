@@ -14,7 +14,7 @@ class DataGenerator:
     _faker_regex = re.compile(r'{{2}faker:(?P<function>\w+?)}{2}')
     _namegen_regex = re.compile(r'{{2}namegen:(?P<language>\w+?)}{2}')
 
-    _conditional_regex = re.compile(r'\[(?P<field>.*)](?:=(?P<condition>.*))?')
+    _conditional_regex = re.compile(r'(?P<not>!)?\[(?P<field>.*)](?:=(?P<condition>.*))?')
 
     def __init__(self, model):
         self.data_model = model
@@ -68,7 +68,10 @@ class DataGenerator:
             data[key] = model
 
     def _generate_from_list(self, key, model, data):
-        is_weighted = len(model) > 1 and len(model[0]) == 2 and isinstance(model[0][1], (int, float))
+        is_weighted = len(model) > 1 and\
+                      model[0] is not None and\
+                      len(model[0]) == 2 and\
+                      isinstance(model[0][1], (int, float))
 
         if is_weighted:
             population, weights = itertools.zip_longest(*model, fillvalue=1)
@@ -79,13 +82,18 @@ class DataGenerator:
         self._generate_from(key, random_value, data)
 
     def _generate_from_dict(self, key, model, data):
-        match = self._conditional_regex.match(key)
-        if match:
-            groups = match.groupdict()
+        conditional_field_match = self._conditional_regex.match(key)
+        if conditional_field_match is not None:
+            groups = conditional_field_match.groupdict()
+            reverse_condition = groups.get('not')
             field = data.get(groups.get('field'))
             condition = groups.get('condition')
+            condition_met = field is not None and (condition is None or condition == field)
 
-            if field is not None and (condition is None or condition == field):
+            if reverse_condition:
+                condition_met = not condition_met
+
+            if condition_met:
                 for inner_key, inner_val in model.items():
                     self._generate_from(inner_key, inner_val, data)
 
