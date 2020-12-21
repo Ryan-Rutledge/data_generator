@@ -1,24 +1,18 @@
 import faker
 import itertools
-import json
 import random
 import re
-import sys
 from majormode.utils.namegen import NameGeneratorFactory
 
 
-class DataGenerator:
-    """Arbitrary data generator"""
+class StringGenerator:
+    """Replaces placeholder text in strings with generated data"""
 
     _field_regex = re.compile(r'\[(?P<field>\w+?)]')
     _faker_regex = re.compile(r'{{2}faker:(?P<function>\w+?)}{2}')
-    _namegen_regex = re.compile(r'{{2}namegen:(?P<language>\w+?)}{2}')
+    _namegen_regex = re.compile(r'{{2}namegen:(?P<language>\w+?)(?::(?P<min>\d+):(?P<max>\d+))?}{2}')
 
-    _conditional_regex = re.compile(r'(?P<not>!)?\[(?P<field>.*)](?:=(?P<condition>.*))?')
-
-    def __init__(self, model):
-        self.data_model = model
-
+    def __init__(self):
         self.fake = faker.Faker()
 
         # Dict of language names and their corresponding generators
@@ -27,9 +21,53 @@ class DataGenerator:
             [NameGeneratorFactory.get_instance(language) for language in NameGeneratorFactory.Language]
         ))
 
-        for generator in self.namegen.values():
-            generator.min_syl = 3
-            generator.max_syl = 8
+    def sub(self, key, data):
+        """Replace placeholder text in data dict"""
+
+        # Generate faker strings
+        data[key] = self._faker_regex.sub(self._sub_faker, data[key])
+
+        # Generate names
+        data[key] = self._namegen_regex.sub(self._sub_namegen, data[key])
+
+        # Replace field references
+        data[key] = self._field_regex.sub(lambda m: data.get(m.groups()[0]), data[key])
+
+    def _sub_faker(self, match):
+        func_name = match.groupdict()['function']
+        func = getattr(self.fake, func_name)
+        return str(func())
+
+    def _sub_namegen(self, match):
+        groups = match.groupdict()
+        language = groups['language']
+        generator = self.namegen.get(language)
+
+        if generator is not None:
+            # Change minimum and maximum syllables if they are provided
+            min_syl, max_syl = generator.min_syl, generator.max_syl
+            if groups['min'] and groups['max']:
+                generator.min_syl = int(groups['min'])
+                generator.max_syl = int(groups['max'])
+
+            name = generator.generate_name()
+
+            # Return syllable counts back to defaults
+            generator.min_syl, generator.max_syl = min_syl, max_syl
+
+            return name
+
+
+class DataGenerator:
+    """Arbitrary data generator"""
+
+    _conditional_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<condition>.*))?$')
+    _count_regex = re.compile(r'^(?P<field>.+)\*(?:(?P<count>\d+)|(?P<min>\d)+-(?P<max>\d+))$')
+    _hidden_regex = re.compile(r'^_.+$')
+
+    def __init__(self, model):
+        self.data_model = model
+        self.string_generator = StringGenerator()
 
     def __iter__(self):
         while True:
@@ -38,26 +76,46 @@ class DataGenerator:
     def __next__(self):
         return self.generate()
 
-    def generate(self):
+    def generate(self, model=None):
         data = {}
-        for key, val in self.data_model.items():
-            self._generate_from(key, val, data)
+        data_model = self.data_model if model is None else model
 
+        for key, val in data_model.items():
+            self._generate(key, val, data)
+
+        hidden_fields = []
         for key in data.keys():
             if isinstance(data[key], str):
-                # Generate faker strings
-                data[key] = self._faker_regex.sub(
-                    lambda m: str(getattr(self.fake, m.groups()[0])()), data[key])
+                self.string_generator.sub(key, data)
 
-                # Generate names
-                data[key] = self._namegen_regex.sub(
-                    lambda m: self.namegen.get(m.groups()[0]).generate_name(), data[key])
+            # Remove fields that are denoted as hidden
+            if self._hidden_regex.match(key):
+                hidden_fields.append(key)
 
-                # Replace field references
-                data[key] = self._field_regex.sub(
-                    lambda m: data.get(m.groups()[0]), data[key])
+        for hidden_field in hidden_fields:
+            del data[hidden_field]
 
         return data
+
+    def _generate(self, key, model, data):
+        # Check if generator should generate an array
+        count_match = self._count_regex.match(key)
+        if count_match:
+            match_groups = count_match.groupdict()
+            field = match_groups['field']
+            count = match_groups['count']
+
+            if count is None:
+                min_count = int(match_groups['min'])
+                max_count = int(match_groups['max'])
+                count = random.randint(min_count, max_count)
+
+            data[field] = []
+            for i in range(int(count)):
+                sub_data = self.generate(model)
+                data[field].append(sub_data)
+        else:
+            self._generate_from(key, model, data)
 
     def _generate_from(self, key, model, data):
         if isinstance(model, list):
@@ -79,7 +137,7 @@ class DataGenerator:
         else:
             random_value = random.choice(model)
 
-        self._generate_from(key, random_value, data)
+        self._generate(key, random_value, data)
 
     def _generate_from_dict(self, key, model, data):
         conditional_field_match = self._conditional_regex.match(key)
@@ -95,22 +153,4 @@ class DataGenerator:
 
             if condition_met:
                 for inner_key, inner_val in model.items():
-                    self._generate_from(inner_key, inner_val, data)
-
-
-def main():
-    if len(sys.argv) != 3:
-        raise Exception('Wrong number of args')
-
-    config_path, row_count = sys.argv[1], int(sys.argv[2])
-
-    with open(config_path) as config_file:
-        config = json.load(config_file)
-
-    generator = DataGenerator(config)
-    for i in range(row_count):
-        print(json.dumps(next(generator), indent=4), '\n')
-
-
-if __name__ == '__main__':
-    main()
+                    self._generate(inner_key, inner_val, data)
