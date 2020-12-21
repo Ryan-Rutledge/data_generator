@@ -10,12 +10,14 @@ from majormode.utils.namegen import NameGeneratorFactory
 class DataGenerator:
     """Arbitrary data generator"""
 
-    _field_regex = re.compile(r'{{2}(?P<field>\w+?)}{2}')
+    _field_regex = re.compile(r'\[(?P<field>\w+?)]')
     _faker_regex = re.compile(r'{{2}faker:(?P<function>\w+?)}{2}')
     _namegen_regex = re.compile(r'{{2}namegen:(?P<language>\w+?)}{2}')
 
-    def __init__(self, data):
-        self.data = data
+    _conditional_regex = re.compile(r'\[(?P<field>.*)](?:=(?P<condition>.*))?')
+
+    def __init__(self, model):
+        self.data_model = model
 
         self.fake = faker.Faker()
 
@@ -37,39 +39,57 @@ class DataGenerator:
         return self.generate()
 
     def generate(self):
-        rows = {}
-        for key, val in self.data.items():
-            # Generate fields
-            rows[key] = self._generate_from(val)
+        data = {}
+        for key, val in self.data_model.items():
+            self._generate_from(key, val, data)
 
-            # Generate faker strings
-            rows[key] = self._faker_regex.sub(lambda m: str(getattr(self.fake, m.groups()[0])()), rows[key])
+        for key in data.keys():
+            if isinstance(data[key], str):
+                # Generate faker strings
+                data[key] = self._faker_regex.sub(
+                    lambda m: str(getattr(self.fake, m.groups()[0])()), data[key])
 
-            # Generate names
-            rows[key] = self._namegen_regex.sub(lambda m: self.namegen.get(m.groups()[0]).generate_name(), rows[key])
+                # Generate names
+                data[key] = self._namegen_regex.sub(
+                    lambda m: self.namegen.get(m.groups()[0]).generate_name(), data[key])
 
-            # Replace field references
-            rows[key] = self._field_regex.sub(lambda m: rows.get(m.groups()[0]), rows[key])
+                # Replace field references
+                data[key] = self._field_regex.sub(
+                    lambda m: data.get(m.groups()[0]), data[key])
 
-        return rows
+        return data
 
-    def _generate_from(self, data):
-        if isinstance(data, list):
-            return self._generate_from_list(data)
-        else:
-            return data
+    def _generate_from(self, key, model, data):
+        if isinstance(model, list):
+            self._generate_from_list(key, model, data)
+        elif isinstance(model, dict):
+            self._generate_from_dict(key, model, data)
+        elif model is not None:
+            data[key] = model
 
-    def _generate_from_list(self, data):
-        is_weighted = len(data) > 1 and len(data[0]) == 2 and isinstance(data[0][1], (int, float))
+    def _generate_from_list(self, key, model, data):
+        is_weighted = len(model) > 1 and len(model[0]) == 2 and isinstance(model[0][1], (int, float))
 
         if is_weighted:
-            population, weights = itertools.zip_longest(*data, fillvalue=1)
+            population, weights = itertools.zip_longest(*model, fillvalue=1)
             random_value = random.choices(population, weights, k=1)
         else:
-            random_value = random.choice(data)
+            random_value = random.choice(model)
 
-        return self._generate_from(random_value)
+        self._generate_from(key, random_value, data)
 
+    def _generate_from_dict(self, key, model, data):
+        # TODO: Add {field}={value} conditional
+
+        match = self._conditional_regex.match(key)
+        if match:
+            groups = match.groupdict()
+            field = data.get(groups.get('field'))
+            condition = groups.get('condition')
+
+            if field is not None and (condition is None or condition == field):
+                for inner_key, inner_val in model.items():
+                    self._generate_from(inner_key, inner_val, data)
 
 def main():
     if len(sys.argv) != 3:
