@@ -1,4 +1,3 @@
-import faker
 import itertools
 import random
 import re
@@ -9,12 +8,9 @@ class StringGenerator:
     """Dict value manipulator and fake data generator"""
 
     _field_regex = re.compile(r'\[(?P<field>\w+?)]')
-    _faker_regex = re.compile(r'{{2}fake:(?P<function>\w+?)}{2}')
     _name_regex = re.compile(r'{{2}name:(?P<language>\w+?)(?::(?P<min>\d+):(?P<max>\d+))?}{2}')
 
     def __init__(self):
-        self.fake = faker.Faker()
-
         # Dict of language names and their corresponding generators
         self.name_generators = dict(zip(
             [str(language) for language in NameGeneratorFactory.Language],
@@ -24,21 +20,11 @@ class StringGenerator:
     def sub(self, key, data):
         """Replace placeholder text in data dict"""
 
-        # Generate faker strings
-        data[key] = self._faker_regex.sub(self._sub_faker, data[key])
-
         # Generate names
         data[key] = self._name_regex.sub(self._sub_name, data[key])
 
         # Replace field references
         data[key] = self._field_regex.sub(lambda m: data.get(m.groups()[0]), data[key])
-
-    def _sub_faker(self, match):
-        """Replace faker function regex match with function output"""
-
-        func_name = match.groupdict()['function']
-        func = getattr(self.fake, func_name)
-        return str(func())
 
     def _sub_name(self, match):
         """Replace name generator language regex match with random name"""
