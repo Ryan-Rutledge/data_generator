@@ -52,7 +52,8 @@ class DataGenerator:
     """Arbitrary data generator"""
 
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
-    _repeat_field_regex = re.compile(r'^(?P<field>.+)\*(?:(?P<repetitions>\d+)|(?P<min>\d)+-(?P<max>\d+))$')
+
+    _repeat_field_regex = re.compile(r'^(?P<field>.+)(?P<condition>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?$')
     _hidden_field_regex = re.compile(r'^_.+$')
 
     def __init__(self, model):
@@ -74,7 +75,7 @@ class DataGenerator:
 
         # Generate random data for each field
         for field, val in data_model.items():
-            self._generate_field(field, val, data)
+            self._generate_info(field, val, data)
 
         self._clean_data(data)
 
@@ -97,7 +98,7 @@ class DataGenerator:
         for hidden_field in hidden_fields:
             del data[hidden_field]
 
-    def _generate_field(self, key, model, data):
+    def _generate_info(self, key, model, data):
         """Generate model data and adds it to data[key]"""
 
         repeating_field_match = self._repeat_field_regex.match(key)
@@ -105,19 +106,38 @@ class DataGenerator:
         if repeating_field_match:
             # Generate a self-contained list of random data
             groups = repeating_field_match.groupdict()
-            field, reps = groups['field'], groups['repetitions']
-            min_reps, max_reps = reps or groups['min'], reps or groups['max']
-            reps = random.randint(int(min_reps), int(max_reps))
+            field, condition = groups['field'], groups['condition']
+            min_reps, max_reps = groups['min'], groups['max']
+            reps = random.randint(int(min_reps), int(max_reps or min_reps))
 
-            data[field] = [self._generate_object(model) for _ in range(reps)]
+            data[field] = []
+            if condition == '+':
+                # Generate a non-repeating list (requires list)
+                for sub_model in random.sample(model, reps):
+                    self._generate_list_item(field, sub_model, data)
+            else:
+                # Generate a completely random list
+                for _ in range(reps):
+                    self._generate_list_item(field, model, data)
         else:
-            # Recursively generate a single instance of data
-            if isinstance(model, list):
-                self._generate_from_list(key, model, data)
-            elif isinstance(model, dict):
-                self._generate_from_dict(key, model, data)
-            elif model is not None:
-                data[key] = model
+            self._generate_from_unknown(key, model, data)
+
+    def _generate_list_item(self, key, model, data):
+        """Appends a list item to data"""
+
+        sub_data = {}
+        self._generate_from_unknown(key, model, sub_data)
+        data[key].append(sub_data[key])
+
+    def _generate_from_unknown(self, key, model, data):
+        """Evaluate model and recursively generate data based on attributes"""
+
+        if isinstance(model, list):
+            self._generate_from_list(key, model, data)
+        elif isinstance(model, dict):
+            self._generate_from_dict(key, model, data)
+        elif model is not None:
+            data[key] = model
 
     def _generate_from_list(self, key, model, data):
         """Randomly select a list item"""
@@ -133,7 +153,7 @@ class DataGenerator:
         else:
             random_value = random.choice(model)
 
-        self._generate_field(key, random_value, data)
+        self._generate_info(key, random_value, data)
 
     def _generate_from_dict(self, key, model, data):
         """Extract fields from dictionary if condition is met"""
@@ -148,4 +168,6 @@ class DataGenerator:
 
             if reverse_condition ^ condition_met:
                 for inner_key, inner_val in model.items():
-                    self._generate_field(inner_key, inner_val, data)
+                    self._generate_info(inner_key, inner_val, data)
+        else:
+            data[key] = self._generate_object(model)
