@@ -6,17 +6,17 @@ from majormode.utils.namegen import NameGeneratorFactory
 
 
 class StringGenerator:
-    """Replaces placeholder text in strings with generated data"""
+    """Dict value manipulator and fake data generator"""
 
     _field_regex = re.compile(r'\[(?P<field>\w+?)]')
-    _faker_regex = re.compile(r'{{2}faker:(?P<function>\w+?)}{2}')
-    _namegen_regex = re.compile(r'{{2}namegen:(?P<language>\w+?)(?::(?P<min>\d+):(?P<max>\d+))?}{2}')
+    _faker_regex = re.compile(r'{{2}fake:(?P<function>\w+?)}{2}')
+    _name_regex = re.compile(r'{{2}name:(?P<language>\w+?)(?::(?P<min>\d+):(?P<max>\d+))?}{2}')
 
     def __init__(self):
         self.fake = faker.Faker()
 
         # Dict of language names and their corresponding generators
-        self.namegen = dict(zip(
+        self.name_generators = dict(zip(
             [str(language) for language in NameGeneratorFactory.Language],
             [NameGeneratorFactory.get_instance(language) for language in NameGeneratorFactory.Language]
         ))
@@ -28,23 +28,27 @@ class StringGenerator:
         data[key] = self._faker_regex.sub(self._sub_faker, data[key])
 
         # Generate names
-        data[key] = self._namegen_regex.sub(self._sub_namegen, data[key])
+        data[key] = self._name_regex.sub(self._sub_name, data[key])
 
         # Replace field references
         data[key] = self._field_regex.sub(lambda m: data.get(m.groups()[0]), data[key])
 
     def _sub_faker(self, match):
+        """Replace faker function regex match with function output"""
+
         func_name = match.groupdict()['function']
         func = getattr(self.fake, func_name)
         return str(func())
 
-    def _sub_namegen(self, match):
+    def _sub_name(self, match):
+        """Replace name generator language regex match with random name"""
+
         groups = match.groupdict()
         language = groups['language']
-        generator = self.namegen.get(language)
+        generator = self.name_generators.get(language)
 
         if generator is not None:
-            # Change minimum and maximum syllables if they are provided
+            # Use minimum and maximum syllables if they are provided
             min_syl, max_syl = generator.min_syl, generator.max_syl
             if groups['min'] and groups['max']:
                 generator.min_syl = int(groups['min'])
@@ -61,9 +65,9 @@ class StringGenerator:
 class DataGenerator:
     """Arbitrary data generator"""
 
-    _conditional_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<condition>.*))?$')
-    _count_regex = re.compile(r'^(?P<field>.+)\*(?:(?P<count>\d+)|(?P<min>\d)+-(?P<max>\d+))$')
-    _hidden_regex = re.compile(r'^_.+$')
+    _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
+    _repeat_field_regex = re.compile(r'^(?P<field>.+)\*(?:(?P<repetitions>\d+)|(?P<min>\d)+-(?P<max>\d+))$')
+    _hidden_field_regex = re.compile(r'^_.+$')
 
     def __init__(self, model):
         self.data_model = model
@@ -74,62 +78,68 @@ class DataGenerator:
             yield next(self)
 
     def __next__(self):
-        return self.generate()
+        return self._generate_object()
 
-    def generate(self, model=None):
-        data = {}
+    def _generate_object(self, model=None):
+        """Generate a dict of random data"""
+
         data_model = self.data_model if model is None else model
+        data = {}
 
-        for key, val in data_model.items():
-            self._generate(key, val, data)
+        # Generate random data for each field
+        for field, val in data_model.items():
+            self._generate_field(field, val, data)
 
-        hidden_fields = []
-        for key in data.keys():
-            if isinstance(data[key], str):
-                self.string_generator.sub(key, data)
-
-            # Remove fields that are denoted as hidden
-            if self._hidden_regex.match(key):
-                hidden_fields.append(key)
-
-        for hidden_field in hidden_fields:
-            del data[hidden_field]
+        self._clean_data(data)
 
         return data
 
-    def _generate(self, key, model, data):
-        # Check if generator should generate an array
-        count_match = self._count_regex.match(key)
-        if count_match:
-            match_groups = count_match.groupdict()
-            field = match_groups['field']
-            count = match_groups['count']
+    def _clean_data(self, data):
+        """Replace placeholder text and applies post-generation cleanup"""
 
-            if count is None:
-                min_count = int(match_groups['min'])
-                max_count = int(match_groups['max'])
-                count = random.randint(min_count, max_count)
+        hidden_fields = []
+        for key in data.keys():
+            # Substitute placeholders
+            if isinstance(data[key], str):
+                self.string_generator.sub(key, data)
 
-            data[field] = []
-            for i in range(int(count)):
-                sub_data = self.generate(model)
-                data[field].append(sub_data)
+            # Record field to be removed if it's marked as hidden
+            if self._hidden_field_regex.match(key):
+                hidden_fields.append(key)
+
+        # Remove hidden fields
+        for hidden_field in hidden_fields:
+            del data[hidden_field]
+
+    def _generate_field(self, key, model, data):
+        """Generate model data and adds it to data[key]"""
+
+        repeating_field_match = self._repeat_field_regex.match(key)
+
+        if repeating_field_match:
+            # Generate a self-contained list of random data
+            groups = repeating_field_match.groupdict()
+            field, reps = groups['field'], groups['repetitions']
+            min_reps, max_reps = reps or groups['min'], reps or groups['max']
+            reps = random.randint(int(min_reps), int(max_reps))
+
+            data[field] = [self._generate_object(model) for _ in range(reps)]
         else:
-            self._generate_from(key, model, data)
-
-    def _generate_from(self, key, model, data):
-        if isinstance(model, list):
-            self._generate_from_list(key, model, data)
-        elif isinstance(model, dict):
-            self._generate_from_dict(key, model, data)
-        elif model is not None:
-            data[key] = model
+            # Recursively generate a single instance of data
+            if isinstance(model, list):
+                self._generate_from_list(key, model, data)
+            elif isinstance(model, dict):
+                self._generate_from_dict(key, model, data)
+            elif model is not None:
+                data[key] = model
 
     def _generate_from_list(self, key, model, data):
+        """Randomly select a list item"""
+
         is_weighted = len(model) > 1 and\
-                      model[0] is not None and\
-                      len(model[0]) == 2 and\
-                      isinstance(model[0][1], (int, float))
+            model[0] is not None and\
+            len(model[0]) == 2 and\
+            isinstance(model[0][1], (int, float))
 
         if is_weighted:
             population, weights = itertools.zip_longest(*model, fillvalue=1)
@@ -137,20 +147,19 @@ class DataGenerator:
         else:
             random_value = random.choice(model)
 
-        self._generate(key, random_value, data)
+        self._generate_field(key, random_value, data)
 
     def _generate_from_dict(self, key, model, data):
-        conditional_field_match = self._conditional_regex.match(key)
+        """Extract fields from dictionary if condition is met"""
+
+        conditional_field_match = self._conditional_field_regex.match(key)
         if conditional_field_match is not None:
             groups = conditional_field_match.groupdict()
-            reverse_condition = groups.get('not')
-            field = data.get(groups.get('field'))
-            condition = groups.get('condition')
-            condition_met = field is not None and (condition is None or condition == field)
+            reverse_condition = bool(groups.get('not'))
+            reference_field = data.get(groups.get('field'))
+            value = groups.get('value')
+            condition_met = reference_field is not None and (value is None or value == reference_field)
 
-            if reverse_condition:
-                condition_met = not condition_met
-
-            if condition_met:
+            if reverse_condition ^ condition_met:
                 for inner_key, inner_val in model.items():
-                    self._generate(inner_key, inner_val, data)
+                    self._generate_field(inner_key, inner_val, data)
