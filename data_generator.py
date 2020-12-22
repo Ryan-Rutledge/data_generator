@@ -52,7 +52,6 @@ class DataGenerator:
     """Arbitrary data generator"""
 
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
-
     _repeat_field_regex = re.compile(r'^(?P<field>.+)(?P<condition>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?$')
     _hidden_field_regex = re.compile(r'^_.+$')
 
@@ -142,16 +141,10 @@ class DataGenerator:
     def _generate_from_list(self, key, model, data):
         """Randomly select a list item"""
 
-        is_weighted = len(model) > 1 and\
-            model[0] is not None and\
-            len(model[0]) == 2 and\
-            isinstance(model[0][1], (int, float))
-
-        if is_weighted:
-            population, weights = itertools.zip_longest(*model, fillvalue=1)
-            random_value = random.choices(population, weights, k=1)
-        else:
-            random_value = random.choice(model)
+        is_weighted = lambda m: isinstance(m, list) and len(m) == 2 and isinstance(m[1], (int, float))
+        selection = [m if is_weighted(m) else [m, 1] for m in model]
+        population, weights = itertools.zip_longest(*selection, fillvalue=1)
+        random_value = random.choices(population, weights)[0]
 
         self._generate_info(key, random_value, data)
 
