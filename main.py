@@ -25,7 +25,7 @@ def main():
     }[output_format]
 
     for i in range(row_count):
-        print(dump(next(generator), indent=4, sort_keys=False), '\n')
+        print(dump(next(generator), indent=4, sort_keys=False), end='')
 
 
 if __name__ == '__main__':
