@@ -1,14 +1,14 @@
 import random
 from abc import ABCMeta, abstractmethod
 from majormode.utils.namegen import NameGeneratorFactory
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 
 class BaseGenerator(metaclass=ABCMeta):
     """Abstract node for holding arbitrary data"""
 
     def __init__(self,
-                 reps: [int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         self.conditions = conditions or []
@@ -62,7 +62,7 @@ class NoneGenerator(BaseGenerator):
 class RepeaterGenerator(BaseGenerator, metaclass=ABCMeta):
     """Abstract node for custom repetition features"""
 
-    def generate(self, data: dict = None) -> Any:
+    def generate(self, data: dict = None) -> Optional[Any]:
         data = data or {}
         if self.meets_conditions(data):
             return self._generate(data)
@@ -76,7 +76,7 @@ class IntegerGenerator(BaseGenerator, metaclass=ABCMeta):
     """Generates integers"""
 
     def __init__(self, start: int, stop: int, step: int = 1,
-                 reps: [int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -90,7 +90,7 @@ class FloatGenerator(BaseGenerator, metaclass=ABCMeta):
     """Generates floating point numbers"""
 
     def __init__(self, start: float, stop: float, decimals: int = 1,
-                 reps: [int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -110,7 +110,7 @@ class NameGenerator(RepeaterGenerator):
 
     def __init__(self,
                  language: str = 'Hebrew',
-                 reps: [int, tuple[int, int]] = (1, 4),
+                 reps: Union[int, tuple[int, int]] = (1, 4),
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -127,7 +127,7 @@ class StringGenerator(BaseGenerator):
     def __init__(self,
                  string: str,
                  generators: list[BaseGenerator] = None,
-                 reps: [int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -145,8 +145,8 @@ class SampleGenerator(BaseGenerator):
 
     def __init__(self,
                  generators: list[BaseGenerator],
-                 size: [int, tuple[int, int]] = 1,
-                 reps: [int, tuple[int, int]] = 1,
+                 size: Union[int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -158,7 +158,7 @@ class SampleGenerator(BaseGenerator):
         fake_data = list([d.generate(data) for d in random.sample(self.generators, k=count)])
         return self._list_or_element(fake_data)
 
-    def _list_or_element(self, items: list) -> [Any, list]:
+    def _list_or_element(self, items: list) -> Any:
         return items[0] if self.min_size == 1 and self.max_size == 1 else items
 
 
@@ -168,8 +168,8 @@ class ChoiceGenerator(RepeaterGenerator):
     def __init__(self,
                  generators: [BaseGenerator] = None,
                  weights: [int] = None,
-                 reps: [int, tuple[int, int]] = 1,
-                 conditions: [Callable[[dict], bool]] = None):
+                 reps: Union[int, tuple[int, int]] = 1,
+                 conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
         self.weights = weights or [1] * len(self.generators)  # Default all weights to 1
@@ -188,7 +188,7 @@ class DictGenerator(BaseGenerator):
 
     def __init__(self,
                  generators: dict[str, BaseGenerator] = None,
-                 reps: [int, tuple[int, int]] = 1,
+                 reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
