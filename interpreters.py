@@ -58,7 +58,8 @@ class DictInterpreter(Interpreter):
 
     _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::\w+)+?)?}{2}')
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
-    _repeat_field_regex = re.compile(r'^(?P<field>.+)(?P<operator>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?$')
+    _repeat_field_regex = re.compile(r'^(?P<field>.+)(?:(?P<operator>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?)+$')
+    _clean_notation_regex = re.compile(r'^(?P<field>.*?)[*+]?$')
     # _hidden_field_regex = re.compile(r'^_.+$')
 
     @classmethod
@@ -109,9 +110,10 @@ class DictInterpreter(Interpreter):
         """Returns an arbitrary generator object"""
 
         conditions = conditions or []
-        reps = cls._get_counter(field_name, '*') or (1, 1)
+        field_name, reps = cls._get_counter(field_name, '*')
+        reps = reps or 1
         if isinstance(source, list):
-            size = cls._get_counter(field_name, '+')  # Sample generator notation
+            field_name, size = cls._get_counter(field_name, '+')  # Sample generator notation
 
             if size:
                 generator = cls._make_sample_generator(source, size, reps, conditions)
@@ -249,20 +251,16 @@ class DictInterpreter(Interpreter):
         return condition
 
     @classmethod
-    def _remove_notation(cls, field: str) -> str:
-        repeat_match = cls._repeat_field_regex.match(field)
-
-        if repeat_match:
-            return repeat_match.groupdict()['field']
-        return field
+    def _remove_notation(cls, string: str) -> str:
+        return cls._clean_notation_regex.match(string).groupdict()['field']
 
     @classmethod
-    def _get_counter(cls, string: str, operator: str) -> [tuple[int, int], None]:
+    def _get_counter(cls, string: str, operator: str) -> tuple[str, Union[tuple[int, int], None]]:
         repeating_field_match = cls._repeat_field_regex.match(string)
         if repeating_field_match:
             groups = repeating_field_match.groupdict()
             if groups['operator'] == operator:
                 min_reps = int(groups.get('min', 1))
                 max_reps = int(groups.get('max') or min_reps)
-                return min_reps, max_reps
-        return None
+                return groups['field'], (min_reps, max_reps)
+        return string, None
