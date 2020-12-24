@@ -58,6 +58,7 @@ class NoneGenerator(BaseGenerator):
     def _generate(self, data: dict = None) -> None:
         return None
 
+
 class RepeaterGenerator(BaseGenerator, metaclass=ABCMeta):
     """Abstract node for custom repetition features"""
 
