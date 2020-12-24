@@ -3,7 +3,7 @@ import json
 import yaml
 
 
-from data_generator import DataGenerator
+from interpreters import DictInterpreter
 
 
 def main():
@@ -17,7 +17,7 @@ def main():
     with open(config_path) as config_file:
         config = json.load(config_file)
 
-    generator = DataGenerator(config)
+    generator = DictInterpreter.interpret(config)
 
     dump = {
         'yaml': yaml.dump,
