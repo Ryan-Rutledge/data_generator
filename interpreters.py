@@ -260,7 +260,8 @@ class DictInterpreter(Interpreter):
 
     @classmethod
     def _remove_notation(cls, string: str) -> str:
-        return cls._clean_notation_regex.match(string).groupdict()['field']
+        match = cls._clean_notation_regex.match(string)
+        return match.groups()[0] if match else string
 
     @classmethod
     def _get_counter(cls, string: str, operator: str) -> tuple[str, Union[tuple[int, int], None]]:
