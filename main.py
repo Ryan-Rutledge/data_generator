@@ -17,7 +17,7 @@ def main():
     with open(config_path) as config_file:
         config = json.load(config_file)
 
-    generator = DictInterpreter.interpret(config)
+    generator = DictInterpreter(config).interpret()
 
     dump = {
         'yaml': yaml.dump,

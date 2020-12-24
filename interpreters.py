@@ -8,8 +8,16 @@ from typing import Any, Callable, Optional, Union
 class Interpreter(metaclass=ABCMeta):
     """Abstract generator interpreter for converting arbitrary information into an iterable generator"""
 
+    def __init__(self, source: Any):
+        self.source = source
+
+    def interpret(self) -> data_generators.BaseGenerator:
+        """Parse source and convert into a generator"""
+
+        return self._interpret(self.source)
+
     @abstractmethod
-    def interpret(self, source: Any) -> data_generators.BaseGenerator:
+    def _interpret(self, source: Any) -> data_generators.BaseGenerator:
         """Parse source and convert into a generator"""
 
         pass
@@ -59,11 +67,11 @@ class DictInterpreter(Interpreter):
     _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::\w+)+?)?}{2}')
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
     _repeat_field_regex = re.compile(r'^(?P<field>.+)(?:(?P<operator>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?)+$')
-    _clean_notation_regex = re.compile(r'^(?P<field>.*?)[*+]?$')
+    _clean_notation_regex = re.compile(r'^(?P<field>.*?)(?=[*+])')
     # _hidden_field_regex = re.compile(r'^_.+$')
 
     @classmethod
-    def interpret(cls, source: dict) -> data_generators.DictGenerator:
+    def _interpret(cls, source: dict) -> data_generators.DictGenerator:
         return cls._make_dict_generator(source, (1, 1), [])
 
     @classmethod
