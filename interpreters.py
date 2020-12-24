@@ -130,12 +130,25 @@ class DictInterpreter(Interpreter):
 
         generators = []
         for generator_type, args in cls._string_generator_regex.findall(source):
+            generator_type = generator_type.lower()
             generator_args = args[1:].split(':') if args else []
 
             if generator_type == 'name':
-                generators.append(cls._make_name_generator(*generator_args))
+                generator = cls._make_name_generator(*generator_args)
+            elif generator_type == 'int' or generator_type == 'integer':
+                generator = cls._make_integer_generator(*generator_args)
+            elif generator_type == 'float':
+                generator = cls._make_float_generator(*generator_args)
+            else:
+                generator = data_generators.NoneGenerator()
+
+            generators.append(generator)
 
         return data_generators.StringGenerator(string_template, generators, reps, conditions)
+
+    @staticmethod
+    def _arg(*args, index, default=None):
+        return args[1] if len(args) > index else default
 
     @classmethod
     def _make_name_generator(cls, *args):
@@ -144,6 +157,22 @@ class DictInterpreter(Interpreter):
         max_syl = int(args[2]) if len(args) > 2 else 6
 
         return data_generators.NameGenerator(language, (min_syl, max_syl))
+
+    @classmethod
+    def _make_integer_generator(cls, *args):
+        start = int(args[0])
+        stop = int(args[1])
+        step = int(args[2]) if len(args) > 2 else 1
+
+        return data_generators.IntegerGenerator(start, stop, step)
+
+    @classmethod
+    def _make_float_generator(cls, *args):
+        start = float(args[0])
+        stop = float(args[1])
+        decimals = float(args[2]) if len(args) > 2 else 1
+
+        return data_generators.FloatGenerator(start, stop, decimals)
 
     @classmethod
     def _extract_conditions(cls, string: str) -> [Callable[[dict], bool], ...]:
