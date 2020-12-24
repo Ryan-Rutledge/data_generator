@@ -187,16 +187,16 @@ class DictGenerator(BaseGenerator):
     """"Generates each value in a dictionary if the generator conditions are met"""
 
     def __init__(self,
-                 generators: dict[str, BaseGenerator] = None,
+                 generators: list[tuple[str, BaseGenerator]] = None,
                  reps: Union[int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
-        self.generators = generators or dict()
+        self.generators = generators or []
 
     def _generate(self, data: dict = None) -> dict:
         fake_data = {}
-        for field, generator in self.generators.items():
+        for field, generator in self.generators:
             generated_data = generator.generate(fake_data)
 
             if generated_data is not None:
