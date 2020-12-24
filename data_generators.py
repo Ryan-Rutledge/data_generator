@@ -1,15 +1,15 @@
 import random
 from abc import ABCMeta, abstractmethod
 from majormode.utils.namegen import NameGeneratorFactory
-from typing import Callable, Any
+from typing import Any, Callable, Union
 
 
 class BaseGenerator(metaclass=ABCMeta):
     """Abstract node for holding arbitrary data"""
 
     def __init__(self,
-                 reps: [int, (int, int)] = 1,
-                 conditions: list[Callable[[dict], bool], ...] = None):
+                 reps: [int, tuple[int, int]] = 1,
+                 conditions: list[Callable[[dict], bool]] = None):
 
         self.conditions = conditions or []
         self.min_reps, self.max_reps = (reps, reps) if isinstance(reps, int) else reps
@@ -62,7 +62,7 @@ class NoneGenerator(BaseGenerator):
 class RepeaterGenerator(BaseGenerator, metaclass=ABCMeta):
     """Abstract node for custom repetition features"""
 
-    def generate(self, data: dict = None) -> [Any, None]:
+    def generate(self, data: dict = None) -> Any:
         data = data or {}
         if self.meets_conditions(data):
             return self._generate(data)
@@ -76,13 +76,13 @@ class IntegerGenerator(BaseGenerator, metaclass=ABCMeta):
     """Generates integers"""
 
     def __init__(self, start: int, stop: int, step: int = 1,
-                 reps: [int, (int, int)] = 1,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
         self.start, self.stop, self.step = start, stop, step
 
-    def _generate(self, data: dict = None):
+    def _generate(self, data: dict = None) -> int:
         return random.randrange(self.start, self.stop, self.step)
 
 
@@ -90,13 +90,13 @@ class FloatGenerator(BaseGenerator, metaclass=ABCMeta):
     """Generates floating point numbers"""
 
     def __init__(self, start: float, stop: float, decimals: int = 1,
-                 reps: [int, (int, int)] = 1,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
         self.start, self.stop, self.decimals = start, stop, decimals
 
-    def _generate_float(self):
+    def _generate_float(self) -> float:
         return round(random.uniform(self.start, self.stop), self.decimals)
 
 
@@ -110,7 +110,7 @@ class NameGenerator(RepeaterGenerator):
 
     def __init__(self,
                  language: str = 'Hebrew',
-                 reps: [int, (int, int)] = (1, 4),
+                 reps: [int, tuple[int, int]] = (1, 4),
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -126,8 +126,8 @@ class StringGenerator(BaseGenerator):
 
     def __init__(self,
                  string: str,
-                 generators: list[BaseGenerator, ...] = None,
-                 reps: [int, (int, int)] = 1,
+                 generators: list[BaseGenerator] = None,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -144,9 +144,9 @@ class SampleGenerator(BaseGenerator):
     """Random list selection node"""
 
     def __init__(self,
-                 generators: list[BaseGenerator, ...],
-                 size: [int, (int, int)] = 1,
-                 reps: [int, (int, int)] = 1,
+                 generators: list[BaseGenerator],
+                 size: [int, tuple[int, int]] = 1,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -158,7 +158,7 @@ class SampleGenerator(BaseGenerator):
         fake_data = list([d.generate(data) for d in random.sample(self.generators, k=count)])
         return self._list_or_element(fake_data)
 
-    def _list_or_element(self, items: list) -> [Any, list[Any, ...]]:
+    def _list_or_element(self, items: list) -> [Any, list]:
         return items[0] if self.min_size == 1 and self.max_size == 1 else items
 
 
@@ -166,9 +166,9 @@ class ChoiceGenerator(RepeaterGenerator):
     """Random elements chooser"""
 
     def __init__(self,
-                 generators: [BaseGenerator, ...] = None,
-                 weights: [int, ...] = None,
-                 reps: [int, (int, int)] = 1,
+                 generators: [BaseGenerator] = None,
+                 weights: [int] = None,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: [Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)
@@ -188,7 +188,7 @@ class DictGenerator(BaseGenerator):
 
     def __init__(self,
                  generators: dict[str, BaseGenerator] = None,
-                 reps: [int, (int, int)] = 1,
+                 reps: [int, tuple[int, int]] = 1,
                  conditions: list[Callable[[dict], bool]] = None):
 
         super().__init__(reps, conditions)

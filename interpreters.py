@@ -11,7 +11,7 @@ class Interpreter(metaclass=ABCMeta):
         pass
 
     @staticmethod
-    def _field_exists_logic(field_name: str, reverse: bool = False) -> Callable[[], bool]:
+    def _field_exists_logic(field_name: str, reverse: bool = False) -> Callable[[dict], bool]:
         """Return a method that evaluates to true when the supplied data contains field_name"""
 
         def condition(data):
@@ -20,13 +20,25 @@ class Interpreter(metaclass=ABCMeta):
         return condition
 
     @staticmethod
-    def _field_matches_logic(field_name: str, value: str, reverse: bool = False) -> Callable[[], bool]:
+    def _field_matches_logic(field_name: str, value: str, reverse: bool = False) -> Callable[[dict], bool]:
         """Return a method that evaluates to true when the supplied data field matches value"""
 
         def condition(data: dict) -> bool:
             field = data.get(field_name)
             meets_condition = field is not None and field == value
             return meets_condition ^ reverse
+        return condition
+
+    @staticmethod
+    def _or_condition_logic(conditions: list[Callable[[dict], bool]]) -> Callable[[dict], bool]:
+        """Return a method that evaluates to true if either condition is true"""
+
+        def condition(data):
+            for con in conditions:
+                if con(data):
+                    return True
+            return False
+
         return condition
 
 
@@ -46,17 +58,16 @@ class DictInterpreter(Interpreter):
                    field_name: str,
                    source: dict,
                    parent: data_generators.DictGenerator,
-                   conditions: list[Callable[[dict], bool], ...] = None) -> None:
+                   conditions: list[Callable[[dict], bool]] = None) -> None:
 
-        new_conditions = cls._extract_conditions(field_name)
-        conditions = (conditions or []) + new_conditions
+        conditions = conditions or []
+        new_condition = cls._extract_conditions(field_name)
 
-        if new_conditions:
+        if new_condition:
             for key, val in source.items():
-                cls._add_field(key, val, parent, conditions)
+                cls._add_field(key, val, parent, conditions + [new_condition])
         else:
             # Remove conditions from field_name
-            field_name = cls._clean_condition(field_name)
             proper_name = cls._clean_repeater(field_name)
             parent.generators[proper_name] = cls._make_generator(field_name, source, conditions)
 
@@ -82,8 +93,8 @@ class DictInterpreter(Interpreter):
     @classmethod
     def _make_dict_generator(cls,
                              source: dict,
-                             reps: (int, int),
-                             conditions: [Callable[[dict], bool], ...]) -> data_generators.DictGenerator:
+                             reps: tuple[int, int],
+                             conditions: list[Callable[[dict], bool]]) -> data_generators.DictGenerator:
 
         generator = data_generators.DictGenerator(reps=reps, conditions=conditions)
         for key, val in source.items():
@@ -91,7 +102,7 @@ class DictInterpreter(Interpreter):
         return generator
 
     @classmethod
-    def _generate_from_list(cls, items: [Any, ...]) -> [data_generators.BaseGenerator, ...]:
+    def _generate_from_list(cls, items: list[Any]) -> list[data_generators.BaseGenerator]:
         generators = []
         for sub_source in items:
             generator = cls._make_generator('', sub_source)
@@ -102,9 +113,9 @@ class DictInterpreter(Interpreter):
     @classmethod
     def _make_sample_generator(cls,
                                source: list,
-                               size: (int, int),
-                               reps: (int, int),
-                               conditions: [Callable[[dict], bool], ...]) -> data_generators.SampleGenerator:
+                               size: tuple[int, int],
+                               reps: tuple[int, int],
+                               conditions: [Callable[[dict], bool]]) -> data_generators.SampleGenerator:
 
         generators = cls._generate_from_list(source)
         return data_generators.SampleGenerator(generators, size, reps, conditions)
@@ -112,8 +123,8 @@ class DictInterpreter(Interpreter):
     @classmethod
     def _make_choice_generator(cls,
                                source: list,
-                               reps: (int, int),
-                               conditions: [Callable[[dict], bool], ...]) -> data_generators.ChoiceGenerator:
+                               reps: tuple[int, int],
+                               conditions: [Callable[[dict], bool]]) -> data_generators.ChoiceGenerator:
 
         def is_weighted(item):
             return isinstance(item, list) and len(item) == 2 and isinstance(item[1], (int, float))
@@ -125,7 +136,7 @@ class DictInterpreter(Interpreter):
         return data_generators.ChoiceGenerator(generators, weights, reps, conditions=conditions)
 
     @classmethod
-    def _make_string_generator(cls, source, reps: (int, int), conditions: [Callable[[dict], bool], ...]):
+    def _make_string_generator(cls, source, reps: tuple[int, int], conditions: [Callable[[dict], bool]]):
         string_template = cls._string_generator_regex.sub('{}', source)
 
         generators = []
@@ -175,10 +186,19 @@ class DictInterpreter(Interpreter):
         return data_generators.FloatGenerator(start, stop, decimals)
 
     @classmethod
-    def _extract_conditions(cls, string: str) -> [Callable[[dict], bool], ...]:
-        # TODO: Add support for multiple conditions
-
+    def _extract_conditions(cls, string: str) -> [Callable[[dict], bool]]:
         conditions = []
+        substrings = string.split('|')
+        for substring in substrings:
+            conditions.append(cls._extract_condition(substring))
+
+        if len(substrings) > 1:
+            return cls._or_condition_logic(conditions)
+        else:
+            return conditions[0]
+
+    @classmethod
+    def _extract_condition(cls, string: str) -> [Callable[[dict], bool]]:
         conditional_field_match = cls._conditional_field_regex.match(string)
         if conditional_field_match is not None:
             groups = conditional_field_match.groupdict()
@@ -187,13 +207,9 @@ class DictInterpreter(Interpreter):
             value = groups.get('value')
 
             if value is None:  # Check if field has a value
-                condition = cls._field_exists_logic(field, reverse)
+                return cls._field_exists_logic(field, reverse)
             else:
-                condition = cls._field_matches_logic(field, value, reverse)
-
-            conditions.append(condition)
-
-        return conditions
+                return cls._field_matches_logic(field, value, reverse)
 
     @classmethod
     def _clean_repeater(cls, field: str) -> str:
@@ -214,7 +230,7 @@ class DictInterpreter(Interpreter):
         return proper_field
 
     @classmethod
-    def _get_counter(cls, string: str, operator: str) -> [(int, int), None]:
+    def _get_counter(cls, string: str, operator: str) -> [tuple[int, int], None]:
         repeating_field_match = cls._repeat_field_regex.match(string)
         if repeating_field_match:
             groups = repeating_field_match.groupdict()
