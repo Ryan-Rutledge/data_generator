@@ -72,6 +72,34 @@ class RepeaterGenerator(BaseGenerator, metaclass=ABCMeta):
         pass
 
 
+class IntegerGenerator(BaseGenerator, metaclass=ABCMeta):
+    """Generates integers"""
+
+    def __init__(self, start: int, stop: int, step: int = 1,
+                 reps: [int, (int, int)] = 1,
+                 conditions: list[Callable[[dict], bool]] = None):
+
+        super().__init__(reps, conditions)
+        self.start, self.stop, self.step = start, stop, step
+
+    def _generate(self, data: dict = None):
+        return random.randrange(self.start, self.stop, self.step)
+
+
+class FloatGenerator(BaseGenerator, metaclass=ABCMeta):
+    """Generates floating point numbers"""
+
+    def __init__(self, start: float, stop: float, decimals: int = 1,
+                 reps: [int, (int, int)] = 1,
+                 conditions: list[Callable[[dict], bool]] = None):
+
+        super().__init__(reps, conditions)
+        self.start, self.stop, self.decimals = start, stop, decimals
+
+    def _generate_float(self):
+        return round(random.uniform(self.start, self.stop), self.decimals)
+
+
 class NameGenerator(RepeaterGenerator):
     """Generates a name string"""
 
