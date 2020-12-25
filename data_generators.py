@@ -124,8 +124,12 @@ class Complex:
                     for key, val in generated_data:
                         data[key] = val
                 else:
-                    field_name = field.generate(data)
-                    data[field_name] = generated_data
+                    field_names = field.generate(data)
+                    # Ensure field_names is a list
+                    field_names = field_names if isinstance(field_names, list) else [field_names]
+
+                    for field_name in field_names:
+                        data[field_name] = generated_data
 
     class SampleGenerator(BaseGenerator):
         """Random list sampler"""
