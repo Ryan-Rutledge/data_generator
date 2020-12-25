@@ -11,13 +11,8 @@ class Interpreter(metaclass=ABCMeta):
     def __init__(self, source: Any):
         self.source = source
 
-    def interpret(self) -> data_generators.BaseGenerator:
-        """Parse source and convert into a generator"""
-
-        return self._interpret(self.source)
-
     @abstractmethod
-    def _interpret(self, source: Any) -> data_generators.BaseGenerator:
+    def interpret(self) -> data_generators.BaseGenerator:
         """Parse source and convert into a generator"""
 
         pass
@@ -70,14 +65,13 @@ class DictInterpreter(Interpreter):
     _clean_notation_regex = re.compile(r'^(?P<field>.*?)(?=[*+])')
     # _hidden_field_regex = re.compile(r'^_.+$')
 
-    @classmethod
-    def _interpret(cls, source: dict) -> data_generators.Complex.DictGenerator:
-        return cls._make_dict_generator(source)
+    def interpret(self) -> data_generators.Variable.DictGenerator:
+        return self._make_dict_generator(self.source)
 
     @classmethod
-    def _make_dict_generator(cls, source: dict) -> data_generators.Complex.DictGenerator:
+    def _make_dict_generator(cls, source: dict) -> data_generators.Variable.DictGenerator:
 
-        generator = data_generators.Complex.DictGenerator()
+        generator = data_generators.Variable.DictGenerator()
         for key, val in source.items():
             cls._add_field(key, val, generator)
         return generator
@@ -86,7 +80,7 @@ class DictInterpreter(Interpreter):
     def _add_field(cls,
                    field_name: str,
                    source: Union[dict, list],
-                   parent: data_generators.Complex.DictGenerator,
+                   parent: data_generators.Variable.DictGenerator,
                    conditions: list[Callable[[dict], bool]] = None) -> None:
 
         conditions = conditions or []
@@ -105,7 +99,7 @@ class DictInterpreter(Interpreter):
                 for key, val in false_source.items():
                     cls._add_field(key, val, parent, conditions + [reverse_condition])
         else:
-            proper_name = cls._remove_notation(field_name)
+            proper_name = cls._make_string_generator(cls._remove_notation(field_name))
             generator = cls._make_generator(field_name, source)
 
             # Wrap generator in a conditional generator if there are true false
@@ -119,12 +113,12 @@ class DictInterpreter(Interpreter):
     def _make_generator(cls, field_name: str, source: dict) -> data_generators.BaseGenerator:
         """Returns an arbitrary generator object"""
 
-        field_name, reps = cls._get_counter(field_name, '*')
+        field_name, min_reps, max_reps = cls._get_counter(field_name, '*')
         if isinstance(source, list):
-            field_name, size = cls._get_counter(field_name, '+')  # Sample generator notation
+            field_name, min_size, max_size = cls._get_counter(field_name, '+')  # Sample generator notation
 
-            if size:
-                generator = cls._make_sample_generator(source, size)
+            if min_size:
+                generator = cls._make_sample_generator(source, min_size, max_size)
             else:
                 generator = cls._make_choice_generator(source)
         elif isinstance(source, dict):
@@ -134,9 +128,9 @@ class DictInterpreter(Interpreter):
         else:
             generator = data_generators.Primitive.NoneGenerator()
 
-        if reps:
+        if min_reps:
             generator = data_generators.Wrapper.RepeaterGenerator(generator)
-            generator.repeat(*reps)
+            generator.repeat(min_reps, max_reps)
 
         return generator
 
@@ -150,12 +144,16 @@ class DictInterpreter(Interpreter):
         return generators
 
     @classmethod
-    def _make_sample_generator(cls, source: list, size: tuple[int, int]) -> data_generators.Complex.SampleGenerator:
+    def _make_sample_generator(cls,
+                               source: list,
+                               min_size: int = 1,
+                               max_size: int = 1) -> data_generators.Variable.SampleGenerator:
+
         generators = cls._generate_each(source)
-        return data_generators.Complex.SampleGenerator(generators, size)
+        return data_generators.Variable.SampleGenerator(generators, min_size, max_size)
 
     @classmethod
-    def _make_choice_generator(cls, source: list) -> data_generators.Complex.ChoiceGenerator:
+    def _make_choice_generator(cls, source: list) -> data_generators.Variable.ChoiceGenerator:
         def is_weighted(item: Any):
             return isinstance(item, list) and len(item) == 2 and isinstance(item[1], (int, float))
 
@@ -164,20 +162,19 @@ class DictInterpreter(Interpreter):
         population, weights = zip_longest(*selection, fillvalue=1)
 
         generators = cls._generate_each(population)
-        return data_generators.Complex.ChoiceGenerator(generators, weights)
+        return data_generators.Variable.ChoiceGenerator(generators, weights)
 
     @classmethod
-    def _make_string_generator(cls, source: str) -> data_generators.Complex.StringGenerator:
-
-        string_template = cls._string_generator_regex.sub('{}', source)
-        string_generator = data_generators.Complex.StringGenerator(string_template)
-
+    def _make_string_generator(cls, source: str) -> data_generators.Variable.StringGenerator:
         # Add a primitive generator for each instance of string substitution notation
+        substring_generators = []
         for generator_type, args in cls._string_generator_regex.findall(source):
             generator_args = args[1:].split(':') if args else []
             primitive_generator = cls._make_primitive_generator(generator_type.lower(), generator_args)
-            string_generator.generators.append(primitive_generator)
+            substring_generators.append(primitive_generator)
 
+        string_template = cls._string_generator_regex.sub('{}', source)
+        string_generator = data_generators.Variable.StringGenerator(string_template, *substring_generators)
         return string_generator
 
     @classmethod
@@ -221,15 +218,15 @@ class DictInterpreter(Interpreter):
         return match.groups()[0] if match else string
 
     @classmethod
-    def _get_counter(cls, string: str, operator: str) -> tuple[str, Union[tuple[int, int], None]]:
+    def _get_counter(cls, string: str, operator: str) -> tuple[str, Union[int, None], Union[int, None]]:
         repeating_field_match = cls._repeat_field_regex.match(string)
         if repeating_field_match:
             groups = repeating_field_match.groupdict()
             if groups['operator'] == operator:
                 min_reps = int(groups.get('min', 1))
                 max_reps = int(groups.get('max') or min_reps)
-                return groups['field'], (min_reps, max_reps)
-        return string, None
+                return groups['field'], min_reps, max_reps
+        return string, None, None
 
     @classmethod
     def _make_primitive_generator(cls, generator_type: str, args: list[str]):

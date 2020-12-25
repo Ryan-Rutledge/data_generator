@@ -1,11 +1,11 @@
 import random
 from abc import ABCMeta, abstractmethod
-from majormode.utils.namegen import NameGeneratorFactory
+from majormode.utils.namegen import NameGeneratorFactory, NameGenerator
 from typing import Any, Callable, Union
 
 
 class BaseGenerator(metaclass=ABCMeta):
-    """Abstract node for holding arbitrary data"""
+    """Abstract node for generating arbitrary data"""
 
     def __iter__(self):
         while True:
@@ -24,64 +24,149 @@ class BaseGenerator(metaclass=ABCMeta):
 class Primitive:
     """Generators that create their own non-arbitrary types of data"""
 
+    @classmethod
+    def value(cls, value: Any):
+        """Convert a value into a generator if it isn't one already"""
+
+        return value if isinstance(value, BaseGenerator) else Primitive.ValueGenerator(value)
+
     class NoneGenerator(BaseGenerator):
         """None handler generator"""
 
         def generate(self, data: dict = None) -> None:
             return None
 
+    class ValueGenerator(BaseGenerator):
+        """Generates a single arbitrary value"""
+
+        def __init__(self, value: Any = None):
+            self.value(value)
+
+        def value(self, value: Any = None) -> None:
+            """Set generated value"""
+
+            self._value = value
+
+        def generate(self, data: dict = None) -> Any:
+            return self._value
+
     class IntegerGenerator(BaseGenerator):
         """Generates integers"""
 
-        def __init__(self, start: int, stop: int, step: int = 1):
+        def __init__(self,
+                     start: Union[int, BaseGenerator],
+                     stop: Union[int, BaseGenerator],
+                     step: Union[int, BaseGenerator] = 1):
+
             super().__init__()
-            self.start, self.stop, self.step = start, stop, step
+            self.range(start, stop, step)
+
+        def range(self,
+                  start: Union[int, BaseGenerator],
+                  stop: Union[int, BaseGenerator],
+                  step: Union[int, BaseGenerator] = 1) -> None:
+
+            self.start = Primitive.value(start)
+            self.stop = Primitive.value(stop)
+            self.step = Primitive.value(step)
 
         def generate(self, data: dict = None) -> int:
-            return random.randrange(self.start, self.stop, self.step)
+            start = self.start.generate(data)
+            stop = self.stop.generate(data)
+            step = self.step.generate(data)
+
+            return random.randrange(start, stop, step)
 
     class FloatGenerator(BaseGenerator):
         """Generates floating point numbers"""
 
         def __init__(self, start: float, stop: float, precision: int = 1):
             super().__init__()
-            self.start, self.stop, self.precision = start, stop, precision
+            self.range(start, stop, precision)
+
+        def range(self,
+                  start: Union[float, BaseGenerator],
+                  stop: Union[float, BaseGenerator],
+                  precision: Union[float, BaseGenerator] = 1) -> None:
+
+            self.start = Primitive.value(start)
+            self.stop = Primitive.value(stop)
+            self.precision = Primitive.value(precision)
 
         def generate(self, data: dict = None) -> float:
-            return round(random.uniform(self.start, self.stop), self.precision)
+            start = self.start.generate(data)
+            stop = self.stop.generate(data)
+            precision = self.precision.generate(data)
+
+            return round(random.uniform(start, stop), precision)
 
     class NameGenerator(BaseGenerator):
         """Generates a name string"""
 
-        _name_generators = dict(zip(
+        _name_factory_lookup = dict(zip(
             [str(language) for language in NameGeneratorFactory.Language],
             NameGeneratorFactory.Language
         ))
 
-        def __init__(self, language: str = 'Hebrew', min_syl: int = None, max_syl: int = None):
+        def __init__(self,
+                     language: Union[str, BaseGenerator] = 'Hebrew',
+                     min_syl: Union[int, BaseGenerator] = 2,
+                     max_syl: Union[int, BaseGenerator] = 4):
+
             super().__init__()
-            self.generator = NameGeneratorFactory.get_instance(self._name_generators[language])
-            self.generator.min_syl = min_syl or 2
-            self.generator.max_syl = max_syl or 4
+
+            # Create  list of generator classes
+            self._name_factories = dict(
+                [(str(lang), None) for lang in NameGeneratorFactory.Language]
+            )
+
+            self.language(language)
+            self.syllables(min_syl, max_syl)
+
+        @classmethod
+        def _instantiate(cls, language: str):
+            return NameGeneratorFactory.get_instance(cls._name_factory_lookup[language])
+
+        def _get_language_generator(self, language: str) -> NameGenerator:
+            # Instantiate name generator if one for that language has not been already been instantiated
+            generator = self._name_factories.get(language)
+            if generator is None:
+                generator = self._name_factories[language] = self._instantiate(language)
+            return generator
+
+        def language(self, language: Union[str, BaseGenerator]) -> None:
+            self._language = Primitive.value(language)
+
+        def syllables(self, min_syl: Union[int, BaseGenerator], max_syl: Union[int, BaseGenerator]) -> None:
+            self.min_syl = Primitive.value(min_syl)
+            self.max_syl = Primitive.value(max_syl)
 
         def generate(self, data: dict = None) -> str:
-            return self.generator.generate_name(True)
+            language = self._language.generate(data)
+            generator = self._get_language_generator(language)
+            generator.min_syl = self.min_syl.generate(data)
+            generator.max_syl = self.max_syl.generate(data)
+            return generator.generate_name(True)
 
 
-class Complex:
-    """Generators that manipulate primitive generators"""
+class Variable:
+    """Generators with a variable number of child generators"""
 
     class StringGenerator(BaseGenerator):
         """Arbitrary string concatenation"""
 
-        def __init__(self, string: str, generators: list[BaseGenerator] = None):
+        def __init__(self, string: [str, BaseGenerator], *generators: Union[str, BaseGenerator]):
             super().__init__()
-            self.string = string
-            self.generators = generators or []
+            self.string(string, *generators)
+
+        def string(self,  string: [str, BaseGenerator], *generators: [str, BaseGenerator]):
+            self._string = Primitive.value(string)
+            self._generators = [Primitive.value(g) for g in generators]
 
         def generate(self, data: dict = None) -> str:
-            random_substrings = [g.generate(data) for g in self.generators]
-            return self.string.format(*random_substrings)
+            string = self._string.generate(data)
+            substrings = [g.generate(data) for g in self._generators]
+            return string.format(*substrings)
 
     class DictGenerator(BaseGenerator):
         """"Generates each value in a dictionary if return is not None"""
@@ -110,7 +195,7 @@ class Complex:
             """Appends a new key value generator"""
 
             if isinstance(field, str):
-                field = Complex.StringGenerator(field)
+                field = Variable.StringGenerator(field)
 
             self._key_values.append((generator, field))
 
@@ -134,27 +219,45 @@ class Complex:
     class SampleGenerator(BaseGenerator):
         """Random list sampler"""
 
-        def __init__(self, generators: list[BaseGenerator], size: Union[int, tuple[int, int]] = 1):
+        def __init__(self,
+                     generators: list[BaseGenerator],
+                     min_size: Union[int, BaseGenerator],
+                     max_size: Union[int, BaseGenerator]):
 
             super().__init__()
             self.generators = generators
-            self.min_size, self.max_size = (size, size) if isinstance(size, int) else size
+            self.size(min_size, max_size)
+
+        def size(self, min_size, max_size):
+            self._min_size = Primitive.ValueGenerator(min_size)
+            self._max_size = Primitive.ValueGenerator(max_size)
 
         def generate(self, data: dict = None) -> list:
-            count = random.randint(self.min_size, self.max_size)
-            fake_data = list([d.generate(data) for d in random.sample(self.generators, k=count)])
-            return fake_data
+            min_size = self._min_size.generate(data)
+            max_size = self._min_size.generate(data)
+            count = random.randint(min_size, max_size)
+
+            return list([d.generate(data) for d in random.sample(self.generators, k=count)])
 
     class ChoiceGenerator(BaseGenerator):
         """Random element selector"""
 
-        def __init__(self, generators: [BaseGenerator] = None, weights: [int] = None):
+        _DEFAULT_WEIGHT = Primitive.ValueGenerator(1)
+
+        def __init__(self, generators: [BaseGenerator] = None, weights: [int, BaseGenerator] = None):
             super().__init__()
-            self.weights = weights or [1] * len(self.generators)  # Default all weights to 1
-            self.generators = generators
+            self.choices(generators, weights)
+
+        def choices(self, generators: [BaseGenerator] = None, weights: [int, BaseGenerator] = None):
+            self._generators = generators
+            if weights:
+                self._weights = [self._DEFAULT_WEIGHT] * len(self._generators)  # Default all weights to 1
+            else:
+                self._weights = [Primitive.ValueGenerator(w) for w in weights]
 
         def generate(self, data: dict = None) -> Any:
-            generator = random.choices(self.generators, weights=self.weights, k=1)
+            weights = [w.generate(data) for w in self._weights]
+            generator = random.choices(self._generators, weights=weights, k=1)
             return generator[0].generate(data)
 
 
@@ -202,17 +305,19 @@ class Wrapper:
             self.generator = generator
             self.repeat()
 
+        def repeat(self, start: Union[int, BaseGenerator] = 1, stop: int = Union[int, BaseGenerator]) -> None:
+            self._min_reps = Primitive.ValueGenerator(start)
+            self._max_reps = Primitive.ValueGenerator(stop)
+
         def generate(self, data: dict = None) -> Any:
             """Runs a generator a random number of times"""
-            reps = random.randint(self.min_reps, self.max_reps)
+
+            min_reps = self._min_reps.generate(data)
+            max_reps = self._max_reps.generate(data)
+            reps = random.randint(min_reps, max_reps)
 
             fake_data = []
             for _ in range(reps):
                 fake_data.append(self.generator.generate(data))
 
             return fake_data
-
-        def repeat(self, start: int = 1, stop: int = 1, step: int = 1) -> None:
-            self.min_reps = max(start, 1)
-            self.max_reps = min(max(stop, 1), self.min_reps)
-            self.rep_step = max(step, 1)
