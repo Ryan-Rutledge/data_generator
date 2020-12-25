@@ -107,16 +107,15 @@ class DictInterpreter(Interpreter):
         else:
             # Create generator
             proper_name = cls._remove_notation(field_name)
-            generator = cls._make_generator(field_name, source, conditions)
+            generator = cls._make_generator(field_name, source)
+            generator.conditions(*conditions)
             parent.generators.append((proper_name, generator))
 
     @classmethod
-    def _make_generator(cls, field_name: str, source: dict, conditions: list = None) -> data_generators.BaseGenerator:
+    def _make_generator(cls, field_name: str, source: dict) -> data_generators.BaseGenerator:
         """Returns an arbitrary generator object"""
 
-        conditions = conditions or []
         field_name, reps = cls._get_counter(field_name, '*')
-        reps = reps or (1, 1)
         if isinstance(source, list):
             field_name, size = cls._get_counter(field_name, '+')  # Sample generator notation
 
@@ -131,8 +130,10 @@ class DictInterpreter(Interpreter):
         else:
             generator = data_generators.NoneGenerator()
 
-        generator.repeat(*reps)
-        generator.conditions(*conditions)
+        if reps:
+            generator = data_generators.RepeaterGenerator(generator)
+            generator.repeat(*reps)
+
         return generator
 
     @classmethod
@@ -192,8 +193,7 @@ class DictInterpreter(Interpreter):
         min_syl = int(args[1]) if len(args) > 1 else 2
         max_syl = int(args[2]) if len(args) > 2 else 6
 
-        generator = data_generators.NameGenerator(language)
-        generator.repeat(min_syl, max_syl)
+        generator = data_generators.NameGenerator(language, min_syl, max_syl)
         return generator
 
     @staticmethod
