@@ -86,19 +86,46 @@ class Complex:
     class DictGenerator(BaseGenerator):
         """"Generates each value in a dictionary if return is not None"""
 
-        def __init__(self, generators: list[tuple[str, BaseGenerator]] = None):
+        def __init__(self, key_values: list[tuple[BaseGenerator, Union[BaseGenerator, str, None]]] = None):
             super().__init__()
-            self.generators = generators or []
+            self._key_values = []
+            if key_values:
+                self.fields(*key_values)
 
         def generate(self, data: dict = None) -> dict:
             fake_data = {}
-            for field, generator in self.generators:
-                generated_data = generator.generate(fake_data)
-
-                if generated_data is not None:
-                    fake_data[field] = generated_data
+            for generator, field_generator in self._key_values:
+                self._generate(generator, field_generator, fake_data)
 
             return fake_data
+
+        def fields(self, *key_values: tuple[BaseGenerator, Union[BaseGenerator, str, None]]):
+            """Replaces current key value generators"""
+
+            self._key_values.clear()
+            for key_val in key_values:
+                self.field(*key_val)
+
+        def field(self, generator: BaseGenerator, field: Union[BaseGenerator, str, None] = None):
+            """Appends a new key value generator"""
+
+            if isinstance(field, str):
+                field = Complex.StringGenerator(field)
+
+            self._key_values.append((generator, field))
+
+        @staticmethod
+        def _generate(generator: BaseGenerator, field: Union[BaseGenerator, None], data: dict) -> None:
+            generated_data = generator.generate(data)
+
+            if generated_data is not None:
+                if field is None:
+                    # Raise key values from generated data
+                    for key, val in generated_data:
+                        data[key] = val
+                else:
+                    field_name = field.generate(data)
+                    data[field_name] = generated_data
 
     class SampleGenerator(BaseGenerator):
         """Random list sampler"""

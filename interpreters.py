@@ -62,7 +62,7 @@ class Interpreter(metaclass=ABCMeta):
 
 
 class DictInterpreter(Interpreter):
-    """Abstract dict interpreter for converting dict objects into a DictGenerator"""
+    """Abstract interpreter for converting dict objects into a DictGenerator"""
 
     _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::\w+)+?)?}{2}')
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
@@ -113,7 +113,7 @@ class DictInterpreter(Interpreter):
                 generator = data_generators.Wrapper.ConditionalGenerator(generator)
                 generator.conditions(conditions)
 
-            parent.generators.append((proper_name, generator))
+            parent.field(generator, proper_name)
 
     @classmethod
     def _make_generator(cls, field_name: str, source: dict) -> data_generators.BaseGenerator:
@@ -181,42 +181,6 @@ class DictInterpreter(Interpreter):
         return string_generator
 
     @classmethod
-    def _make_primitive_generator(cls, generator_type: str, args: list[str]):
-        if generator_type == 'name':
-            return cls._make_name_generator(*args)
-        elif generator_type == 'int' or generator_type == 'integer':
-            return cls._make_integer_generator(*args)
-        elif generator_type == 'float':
-            return cls._make_float_generator(*args)
-        else:
-            return data_generators.Primitive.NoneGenerator()
-
-    @staticmethod
-    def _make_name_generator(*args: str) -> data_generators.Primitive.NameGenerator:
-        language = args[0] if len(args) > 0 else 'Norse'
-        min_syl = int(args[1]) if len(args) > 1 else 2
-        max_syl = int(args[2]) if len(args) > 2 else 6
-
-        generator = data_generators.Primitive.NameGenerator(language, min_syl, max_syl)
-        return generator
-
-    @staticmethod
-    def _make_integer_generator(*args: str) -> data_generators.Primitive.IntegerGenerator:
-        start = int(args[0])
-        stop = int(args[1])
-        step = int(args[2]) if len(args) > 2 else 1
-
-        return data_generators.Primitive.IntegerGenerator(start, stop, step)
-
-    @staticmethod
-    def _make_float_generator(*args: str) -> data_generators.Primitive.FloatGenerator:
-        start = float(args[0])
-        stop = float(args[1])
-        precision = float(args[2]) if len(args) > 2 else 1
-
-        return data_generators.Primitive.FloatGenerator(start, stop, precision)
-
-    @classmethod
     def _create_condition(cls, string: str) -> Optional[Callable[[dict], bool]]:
         substrings = string.split('|')
 
@@ -266,3 +230,39 @@ class DictInterpreter(Interpreter):
                 max_reps = int(groups.get('max') or min_reps)
                 return groups['field'], (min_reps, max_reps)
         return string, None
+
+    @classmethod
+    def _make_primitive_generator(cls, generator_type: str, args: list[str]):
+        if generator_type == 'name':
+            return cls._make_name_generator(*args)
+        elif generator_type == 'int' or generator_type == 'integer':
+            return cls._make_integer_generator(*args)
+        elif generator_type == 'float':
+            return cls._make_float_generator(*args)
+        else:
+            return data_generators.Primitive.NoneGenerator()
+
+    @staticmethod
+    def _make_name_generator(*args: str) -> data_generators.Primitive.NameGenerator:
+        language = args[0] if len(args) > 0 else 'Norse'
+        min_syl = int(args[1]) if len(args) > 1 else 2
+        max_syl = int(args[2]) if len(args) > 2 else 6
+
+        generator = data_generators.Primitive.NameGenerator(language, min_syl, max_syl)
+        return generator
+
+    @staticmethod
+    def _make_integer_generator(*args: str) -> data_generators.Primitive.IntegerGenerator:
+        start = int(args[0])
+        stop = int(args[1])
+        step = int(args[2]) if len(args) > 2 else 1
+
+        return data_generators.Primitive.IntegerGenerator(start, stop, step)
+
+    @staticmethod
+    def _make_float_generator(*args: str) -> data_generators.Primitive.FloatGenerator:
+        start = float(args[0])
+        stop = float(args[1])
+        precision = float(args[2]) if len(args) > 2 else 1
+
+        return data_generators.Primitive.FloatGenerator(start, stop, precision)
