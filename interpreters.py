@@ -140,7 +140,6 @@ class DictInterpreter(Interpreter):
         for sub_source in items:
             generator = cls._make_generator('', sub_source)
             generators.append(generator)
-
         return generators
 
     @classmethod

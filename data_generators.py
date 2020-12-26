@@ -20,6 +20,12 @@ class BaseGenerator(metaclass=ABCMeta):
 
         pass
 
+    @abstractmethod
+    def info(self) -> Any:
+        """Traversal visualization object returns information about object"""
+
+        pass
+
 
 class Primitive:
     """Generators that create their own non-arbitrary types of data"""
@@ -36,6 +42,9 @@ class Primitive:
         def generate(self, data: dict = None) -> None:
             return None
 
+        def info(self):
+            return None
+
     class ValueGenerator(BaseGenerator):
         """Generates a single arbitrary value"""
 
@@ -48,6 +57,9 @@ class Primitive:
             self._value = value
 
         def generate(self, data: dict = None) -> Any:
+            return self._value
+
+        def info(self) -> Any:
             return self._value
 
     class IntegerGenerator(BaseGenerator):
@@ -66,16 +78,24 @@ class Primitive:
                   stop: Union[int, BaseGenerator],
                   step: Union[int, BaseGenerator] = 1) -> None:
 
-            self.start = Primitive.value(start)
-            self.stop = Primitive.value(stop)
-            self.step = Primitive.value(step)
+            self._start = Primitive.value(start)
+            self._stop = Primitive.value(stop)
+            self._step = Primitive.value(step)
 
         def generate(self, data: dict = None) -> int:
-            start = self.start.generate(data)
-            stop = self.stop.generate(data)
-            step = self.step.generate(data)
+            start = self._start.generate(data)
+            stop = self._stop.generate(data)
+            step = self._step.generate(data)
 
             return random.randrange(start, stop, step)
+
+        def info(self) -> Any:
+            return {
+                'type': 'IntegerGenerator',
+                'start': self._start.info(),
+                'stop': self._stop.info(),
+                'step': self._step.info()
+            }
 
     class FloatGenerator(BaseGenerator):
         """Generates floating point numbers"""
@@ -89,16 +109,24 @@ class Primitive:
                   stop: Union[float, BaseGenerator],
                   precision: Union[float, BaseGenerator] = 1) -> None:
 
-            self.start = Primitive.value(start)
-            self.stop = Primitive.value(stop)
-            self.precision = Primitive.value(precision)
+            self._start = Primitive.value(start)
+            self._stop = Primitive.value(stop)
+            self._precision = Primitive.value(precision)
 
         def generate(self, data: dict = None) -> float:
-            start = self.start.generate(data)
-            stop = self.stop.generate(data)
-            precision = self.precision.generate(data)
+            start = self._start.generate(data)
+            stop = self._stop.generate(data)
+            precision = self._precision.generate(data)
 
             return round(random.uniform(start, stop), precision)
+
+        def info(self) -> Any:
+            return {
+                'type': 'FloatGenerator',
+                'start': self._start.info(),
+                'stop': self._start.info(),
+                'precision': self._precision.info()
+            }
 
     class NameGenerator(BaseGenerator):
         """Generates a name string"""
@@ -138,15 +166,23 @@ class Primitive:
             self._language = Primitive.value(language)
 
         def syllables(self, min_syl: Union[int, BaseGenerator], max_syl: Union[int, BaseGenerator]) -> None:
-            self.min_syl = Primitive.value(min_syl)
-            self.max_syl = Primitive.value(max_syl)
+            self._min_syl = Primitive.value(min_syl)
+            self._max_syl = Primitive.value(max_syl)
 
         def generate(self, data: dict = None) -> str:
             language = self._language.generate(data)
             generator = self._get_language_generator(language)
-            generator.min_syl = self.min_syl.generate(data)
-            generator.max_syl = self.max_syl.generate(data)
+            generator.min_syl = self._min_syl.generate(data)
+            generator.max_syl = self._max_syl.generate(data)
             return generator.generate_name(True)
+
+        def info(self) -> Any:
+            return {
+                'type': 'LanguageGenerator',
+                'language': self._language.info(),
+                'min_syllables': self._min_syl.info(),
+                'max_syllables': self._max_syl.info()
+            }
 
 
 class Variable:
@@ -167,6 +203,15 @@ class Variable:
             string = self._string.generate(data)
             substrings = [g.generate(data) for g in self._generators]
             return string.format(*substrings)
+
+        def info(self) -> Any:
+            if len(self._generators) > 0:
+                return {
+                    'string': self._string.info(),
+                    'formatters': list([f.info() for f in self._generators])
+                }
+            else:
+                return self._string.info()
 
     class DictGenerator(BaseGenerator):
         """"Generates each value in a dictionary if return is not None"""
@@ -216,6 +261,12 @@ class Variable:
                     for field_name in field_names:
                         data[field_name] = generated_data
 
+        def info(self) -> Any:
+            return {
+                'type': 'DictGenerator',
+                'items': list([{"key": k.info(), "value": v.info()} for v, k in self._key_values])
+            }
+
     class SampleGenerator(BaseGenerator):
         """Random list sampler"""
 
@@ -225,7 +276,7 @@ class Variable:
                      max_size: Union[int, BaseGenerator]):
 
             super().__init__()
-            self.generators = generators
+            self._generators = generators
             self.size(min_size, max_size)
 
         def size(self, min_size, max_size):
@@ -237,7 +288,15 @@ class Variable:
             max_size = self._min_size.generate(data)
             count = random.randint(min_size, max_size)
 
-            return list([d.generate(data) for d in random.sample(self.generators, k=count)])
+            return list([d.generate(data) for d in random.sample(self._generators, k=count)])
+
+        def info(self) -> Any:
+            return {
+                'type': 'SampleGenerator',
+                'min': self._min_size.info(),
+                'max': self._max_size.info(),
+                'data': list([g.info() for g in self._generators])
+            }
 
     class ChoiceGenerator(BaseGenerator):
         """Random element selector"""
@@ -248,17 +307,28 @@ class Variable:
             super().__init__()
             self.choices(generators, weights)
 
-        def choices(self, generators: [BaseGenerator] = None, weights: [int, BaseGenerator] = None):
+        def choices(self, generators: [BaseGenerator] = None, weights: [int, BaseGenerator] = None) -> None:
+            """Set list of items to choose items from"""
+
             self._generators = generators
             if weights:
-                self._weights = [self._DEFAULT_WEIGHT] * len(self._generators)  # Default all weights to 1
-            else:
                 self._weights = [Primitive.ValueGenerator(w) for w in weights]
+            else:
+                self._weights = [self._DEFAULT_WEIGHT] * len(self._generators)  # Default all weights to 1
 
         def generate(self, data: dict = None) -> Any:
             weights = [w.generate(data) for w in self._weights]
             generator = random.choices(self._generators, weights=weights, k=1)
             return generator[0].generate(data)
+
+        def info(self) -> Any:
+            return {
+                'type': 'ChoiceGenerator',
+                'items': [{"weight": w, "value": k} for w, k in zip(
+                    [w.info() for w in self._weights],
+                    [g.info() for g in self._generators],
+                )]
+            }
 
 
 class Wrapper:
@@ -277,12 +347,17 @@ class Wrapper:
             self.conditions(conditions)
 
         def true(self, generator: BaseGenerator = None) -> None:
-            self._true_generator = generator or Primitive.NoneGenerator
+            """Set generator to run if all conditions are true"""
+
+            self._true_generator = generator or Primitive.NoneGenerator()
 
         def false(self, generator: BaseGenerator = None) -> None:
-            self._false_generator = generator or Primitive.NoneGenerator
+            """Set generator to run if not all conditions are true"""
+
+            self._false_generator = generator or Primitive.NoneGenerator()
 
         def conditions(self, conditions: list[Callable[[dict], bool]] = None) -> None:
+            """Set boolean conditions that check which generator to run"""
 
             self._conditions = conditions or []
 
@@ -297,12 +372,24 @@ class Wrapper:
 
             return generator.generate(data or {})
 
+        def info(self) -> dict:
+            info = {'conditions': len(self._conditions)}
+            true_info = self._true_generator.info()
+            false_info = self._false_generator.info()
+
+            if true_info is not None:
+                info['true'] = true_info
+            if false_info is not None:
+                info['true'] = false_info
+
+            return info
+
     class RepeaterGenerator(BaseGenerator):
         """Generates repeating generator output"""
 
         def __init__(self, generator: BaseGenerator):
             super().__init__()
-            self.generator = generator
+            self._generator = generator
             self.repeat()
 
         def repeat(self, start: Union[int, BaseGenerator] = 1, stop: int = Union[int, BaseGenerator]) -> None:
@@ -318,6 +405,14 @@ class Wrapper:
 
             fake_data = []
             for _ in range(reps):
-                fake_data.append(self.generator.generate(data))
+                fake_data.append(self._generator.generate(data))
 
             return fake_data
+
+        def info(self) -> Any:
+            return {
+                'type': 'RepeaterGenerator',
+                'min': self._min_reps.info(),
+                'max': self._max_reps.info(),
+                'child': self._generator.info()
+            }
