@@ -55,12 +55,25 @@ class Interpreter(metaclass=ABCMeta):
             return not condition(data)
         return _condition
 
+    @staticmethod
+    def _field_gt_condition_logic(x_field: str,
+                                  y_value: Union[int, float],
+                                  reverse: bool = False) -> Callable[[dict], bool]:
+        """Return a method that evaluates x_field > y"""
+
+        def _condition(data: dict) -> bool:
+            field = data.get(x_field)
+            field = int(field) if field.isdigit() else float(field)
+            meets_condition = field is not None and field > y_value
+            return meets_condition ^ reverse
+        return _condition
+
 
 class DictInterpreter(Interpreter):
     """Abstract interpreter for converting dict objects into a DictGenerator"""
 
     _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::.+?)+?)?}{2}')
-    _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
+    _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:(?P<operator>[=><])(?P<value>.*))?$')
     _repeat_field_regex = re.compile(r'^(?P<field>.+)(?:(?P<operator>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?)+$')
     _clean_notation_regex = re.compile(r'^(?P<field>.*?)(?=[*+])')
     # _hidden_field_regex = re.compile(r'^_.+$')
@@ -203,11 +216,15 @@ class DictInterpreter(Interpreter):
             reverse = bool(groups.get('not'))
             field = groups.get('field')
             value = groups.get('value')
+            operator = groups.get('operator')
 
             if value is None:  # If no match is provided, just check if field exists
                 condition = cls._field_exists_logic(field, reverse)
-            else:
+            elif operator == '=':
                 condition = cls._field_matches_logic(field, value, reverse)
+            elif operator == '>':
+                value = int(value) if value.isdigit() else float(value)
+                condition = cls._field_gt_condition_logic(field, value, reverse)
 
         return condition
 
