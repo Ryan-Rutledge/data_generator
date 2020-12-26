@@ -59,7 +59,7 @@ class Interpreter(metaclass=ABCMeta):
 class DictInterpreter(Interpreter):
     """Abstract interpreter for converting dict objects into a DictGenerator"""
 
-    _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::\w+)+?)?}{2}')
+    _string_generator_regex = re.compile(r'{{2}(?P<generator>\w+)(?P<parameters>(?::.+?)+?)?}{2}')
     _conditional_field_regex = re.compile(r'^(?P<not>!)?\[(?P<field>.*)](?:=(?P<value>.*))?$')
     _repeat_field_regex = re.compile(r'^(?P<field>.+)(?:(?P<operator>[*+])(?:(?P<min>\d+)(?:-(?P<max>\d+))?)?)+$')
     _clean_notation_regex = re.compile(r'^(?P<field>.*?)(?=[*+])')
@@ -235,6 +235,8 @@ class DictInterpreter(Interpreter):
             return cls._make_integer_generator(*args)
         elif generator_type == 'float':
             return cls._make_float_generator(*args)
+        elif generator_type == 'increment':
+            return cls._make_increment_generator(*args)
         else:
             return data_generators.Primitive.NoneGenerator()
 
@@ -262,3 +264,15 @@ class DictInterpreter(Interpreter):
         precision = float(args[2]) if len(args) > 2 else 1
 
         return data_generators.Primitive.FloatGenerator(start, stop, precision)
+
+    @staticmethod
+    def _make_increment_generator(*args: str) -> data_generators.Primitive.IncrementGenerator:
+        start = args[0] if len(args) > 0 else '1'
+        step = args[1] if len(args) > 1 else '1'
+        stop = args[2] if len(args) > 2 else None
+
+        start = int(start) if start.isdigit() else float(start)
+        step = int(step) if step.isdigit() else float(step)
+        stop = None if stop is None else int(stop) if stop.isdigit() else float(stop)
+
+        return data_generators.Primitive.IncrementGenerator(start, step, stop)

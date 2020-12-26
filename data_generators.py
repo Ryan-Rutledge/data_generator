@@ -1,3 +1,4 @@
+import math
 import random
 from abc import ABCMeta, abstractmethod
 from majormode.utils.namegen import NameGeneratorFactory, NameGenerator
@@ -182,6 +183,57 @@ class Primitive:
                 'language': self._language.info(),
                 'min_syllables': self._min_syl.info(),
                 'max_syllables': self._max_syl.info()
+            }
+
+    class IncrementGenerator(BaseGenerator):
+        """Generates incrementing integers"""
+
+        def __init__(self,
+                     start: Union[int, BaseGenerator],
+                     stop: Union[int, float, BaseGenerator] = None,
+                     step: Union[int, float, BaseGenerator] = 1):
+
+            super().__init__()
+            self.range(start, stop, step)
+
+        def range(self,
+                  start: Union[int, float, BaseGenerator],
+                  step: Union[int, float, BaseGenerator] = 1,
+                  stop: Union[int, float, BaseGenerator] = None,
+                  ) -> None:
+
+            self._previous = None
+            self._start = Primitive.value(start)
+            self._step = Primitive.value(step)
+            self._stop = Primitive.value(stop)
+
+        def generate(self, data: dict = None) -> int:
+            value = None
+
+            if self._previous is None:  # If first time running increment
+                value = self._previous = self._start.generate(data)
+            else:
+                step = self._step.generate(data)
+
+                if step is not None:  # Step of None indicates generator is done incrementing
+                    stop = self._stop.generate(data)
+                    value = self._previous + step
+
+                    # If generator has incremented/decremented past stopping point
+                    if stop is not None and ((step > 0 and value > stop) or (step < 0 and value < stop)):
+                        self._step = Primitive.NoneGenerator  # Stop generating
+                        value = None
+                    else:
+                        self._previous = value
+
+            return value
+
+        def info(self) -> Any:
+            return {
+                'type': 'IncrementGenerator',
+                'start': self._start.info(),
+                'step': self._step.info(),
+                'stop': self._stop.info()
             }
 
 
@@ -392,7 +444,7 @@ class Wrapper:
             self._generator = generator
             self.repeat()
 
-        def repeat(self, start: Union[int, BaseGenerator] = 1, stop: int = Union[int, BaseGenerator]) -> None:
+        def repeat(self, start: Union[int, BaseGenerator] = 1, stop: Union[int, BaseGenerator] = 1) -> None:
             self._min_reps = Primitive.ValueGenerator(start)
             self._max_reps = Primitive.ValueGenerator(stop)
 
