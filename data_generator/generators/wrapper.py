@@ -17,12 +17,12 @@ class ConditionalGenerator(BaseGenerator):
     def true(self, generator: BaseGenerator = None) -> None:
         """Set generator to run if all conditions are true"""
 
-        self._true_generator = generator or NoneGenerator()
+        self._true_generator = generator or ValueGenerator(None)
 
     def false(self, generator: BaseGenerator = None) -> None:
         """Set generator to run if not all conditions are true"""
 
-        self._false_generator = generator or NoneGenerator()
+        self._false_generator = generator or ValueGenerator(None)
 
     def conditions(self, conditions: list[Callable[[dict], bool]] = None) -> None:
         """Set boolean conditions that check which generator to run"""

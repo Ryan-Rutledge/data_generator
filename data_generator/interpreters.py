@@ -140,7 +140,7 @@ class DictInterpreter(Interpreter):
         elif isinstance(source, str):
             generator = cls._make_string_generator(source)
         else:
-            generator = data_generator.generators.primitive.NoneGenerator()
+            generator = data_generator.generators.primitive.ValueGenerator(None)
 
         if min_reps:
             generator = data_generator.generators.wrapper.RepeaterGenerator(generator)
@@ -256,7 +256,7 @@ class DictInterpreter(Interpreter):
         elif generator_type == 'increment':
             return cls._make_increment_generator(*args)
         else:
-            return data_generator.generators.primitive.NoneGenerator()
+            return data_generator.generators.primitive.ValueGenerator(None)
 
     @staticmethod
     def _make_name_generator(*args: str) -> data_generator.generators.primitive.NameMaker:

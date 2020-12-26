@@ -27,16 +27,6 @@ class BaseGenerator(metaclass=ABCMeta):
         pass
 
 
-class NoneGenerator(BaseGenerator):
-    """None handler generator"""
-
-    def generate(self, data: dict = None) -> None:
-        return None
-
-    def info(self):
-        return None
-
-
 class ValueGenerator(BaseGenerator):
     """Generates a single arbitrary value"""
 
@@ -216,7 +206,7 @@ class IncrementGenerator(BaseGenerator):
 
                 # If generator has incremented/decremented past stopping point
                 if stop is not None and ((step > 0 and value > stop) or (step < 0 and value < stop)):
-                    self._step = NoneGenerator  # Stop generating
+                    self._step = ValueGenerator(None)  # Stop generating
                     value = None
                 else:
                     self._previous = value
