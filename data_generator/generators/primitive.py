@@ -1,10 +1,9 @@
 import random
 from abc import ABCMeta, abstractmethod
-from majormode.utils.namegen import NameGeneratorFactory, NameGenerator
-from typing import Any, Union
+from typing import Any, Callable, Union
 
 
-class BaseGenerator(metaclass=ABCMeta):
+class Generator(metaclass=ABCMeta):
     """Abstract node for generating arbitrary data"""
 
     def __iter__(self):
@@ -27,7 +26,7 @@ class BaseGenerator(metaclass=ABCMeta):
         pass
 
 
-class ValueGenerator(BaseGenerator):
+class PassThrough(Generator):
     """Generates a single arbitrary value"""
 
     def __init__(self, value: Any = None):
@@ -42,28 +41,28 @@ class ValueGenerator(BaseGenerator):
         return self._value
 
     def info(self) -> Any:
-        return self._value
+        return self._value.__name__ + '()' if callable(self._value) else self._value
 
 
-class IntegerGenerator(BaseGenerator):
+class Integer(Generator):
     """Generates integers"""
 
     def __init__(self,
-                 start: Union[int, BaseGenerator],
-                 stop: Union[int, BaseGenerator],
-                 step: Union[int, BaseGenerator] = 1):
+                 start: Union[int, Generator],
+                 stop: Union[int, Generator],
+                 step: Union[int, Generator] = 1):
 
         super().__init__()
         self.range(start, stop, step)
 
     def range(self,
-              start: Union[int, BaseGenerator],
-              stop: Union[int, BaseGenerator],
-              step: Union[int, BaseGenerator] = 1) -> None:
+              start: Union[int, Generator],
+              stop: Union[int, Generator],
+              step: Union[int, Generator] = 1) -> None:
 
-        self._start = to_generator(start)
-        self._stop = to_generator(stop)
-        self._step = to_generator(step)
+        self._start = generates(start)
+        self._stop = generates(stop)
+        self._step = generates(step)
 
     def generate(self, data: dict = None) -> int:
         start = self._start.generate(data)
@@ -81,7 +80,7 @@ class IntegerGenerator(BaseGenerator):
         }
 
 
-class FloatGenerator(BaseGenerator):
+class Float(Generator):
     """Generates floating point numbers"""
 
     def __init__(self, start: float, stop: float, precision: int = 1):
@@ -89,13 +88,13 @@ class FloatGenerator(BaseGenerator):
         self.range(start, stop, precision)
 
     def range(self,
-              start: Union[float, BaseGenerator],
-              stop: Union[float, BaseGenerator],
-              precision: Union[float, BaseGenerator] = 1) -> None:
+              start: Union[float, Generator],
+              stop: Union[float, Generator],
+              precision: Union[float, Generator] = 1) -> None:
 
-        self._start = to_generator(start)
-        self._stop = to_generator(stop)
-        self._precision = to_generator(precision)
+        self._start = generates(start)
+        self._stop = generates(stop)
+        self._precision = generates(precision)
 
     def generate(self, data: dict = None) -> float:
         start = self._start.generate(data)
@@ -113,116 +112,62 @@ class FloatGenerator(BaseGenerator):
         }
 
 
-class NameMaker(BaseGenerator):
-    """Generates a name string"""
+class Call(Generator):
+    """Generates output of an arbitrary function"""
 
-    _name_factory_lookup = dict(zip(
-        [str(language) for language in NameGeneratorFactory.Language],
-        NameGeneratorFactory.Language
-    ))
+    def __int__(self,
+                function: Union[Callable, Generator],
+                parameters: list = None):
 
-    def __init__(self,
-                 language: Union[str, BaseGenerator] = 'Hebrew',
-                 min_syl: Union[int, BaseGenerator] = 2,
-                 max_syl: Union[int, BaseGenerator] = 4):
+        self.function(function, parameters)
 
+    def function(self,
+                 function: Union[Callable, Generator],
+                 parameters: list = None) -> None:
+
+        self._function = generates(function)
+        self._parameters = [generates(p) for p in parameters]
+
+    def generate(self, data: dict = None) -> Any:
+        function = self._function.generate(data)
+        parameters = [p.generate(data) for p in self._parameters]
+        return function(*parameters)
+
+    def info(self) -> Any:
+        return {
+            'type': 'CallGenerator',
+            'function': self._function.info(),
+            'parameters': [p.info for p in self._parameters]
+        }
+
+
+class String(Generator):
+    """Arbitrary string concatenation"""
+
+    def __init__(self, string: Union[str, Generator], *generators: Union[str, Generator]):
         super().__init__()
+        self.string(string, *generators)
 
-        # Create  list of generator classes
-        self._name_factories = dict(
-            [(str(lang), None) for lang in NameGeneratorFactory.Language]
-        )
-
-        self.language(language)
-        self.syllables(min_syl, max_syl)
-
-    @classmethod
-    def _instantiate(cls, language: str):
-        return NameGeneratorFactory.get_instance(cls._name_factory_lookup[language])
-
-    def _get_language_generator(self, language: str) -> NameGenerator:
-        # Instantiate name generator if one for that language has not been already been instantiated
-        generator = self._name_factories.get(language)
-        if generator is None:
-            generator = self._name_factories[language] = self._instantiate(language)
-        return generator
-
-    def language(self, language: Union[str, BaseGenerator]) -> None:
-        self._language = to_generator(language)
-
-    def syllables(self, min_syl: Union[int, BaseGenerator], max_syl: Union[int, BaseGenerator]) -> None:
-        self._min_syl = to_generator(min_syl)
-        self._max_syl = to_generator(max_syl)
+    def string(self, string: Union[str, Generator], *generators: Union[str, Generator]):
+        self._string = generates(string)
+        self._generators = [generates(g) for g in generators]
 
     def generate(self, data: dict = None) -> str:
-        language = self._language.generate(data)
-        generator = self._get_language_generator(language)
-        generator.min_syl = self._min_syl.generate(data)
-        generator.max_syl = self._max_syl.generate(data)
-        return generator.generate_name(True)
+        string = self._string.generate(data)
+        substrings = [g.generate(data) for g in self._generators]
+        return string.format(*substrings)
 
     def info(self) -> Any:
-        return {
-            'type': 'LanguageGenerator',
-            'language': self._language.info(),
-            'min_syllables': self._min_syl.info(),
-            'max_syllables': self._max_syl.info()
-        }
-
-
-class IncrementGenerator(BaseGenerator):
-    """Generates incrementing integers"""
-
-    def __init__(self,
-                 start: Union[int, BaseGenerator],
-                 stop: Union[int, float, BaseGenerator] = None,
-                 step: Union[int, float, BaseGenerator] = 1):
-
-        super().__init__()
-        self.range(start, stop, step)
-
-    def range(self,
-              start: Union[int, float, BaseGenerator],
-              step: Union[int, float, BaseGenerator] = 1,
-              stop: Union[int, float, BaseGenerator] = None,
-              ) -> None:
-
-        self._previous = None
-        self._start = to_generator(start)
-        self._step = to_generator(step)
-        self._stop = to_generator(stop)
-
-    def generate(self, data: dict = None) -> int:
-        value = None
-
-        if self._previous is None:  # If first time running increment
-            value = self._previous = self._start.generate(data)
+        if len(self._generators) > 0:
+            return {
+                'string': self._string.info(),
+                'formatters': list([f.info() for f in self._generators])
+            }
         else:
-            step = self._step.generate(data)
-
-            if step is not None:  # Step of None indicates generator is done incrementing
-                stop = self._stop.generate(data)
-                value = self._previous + step
-
-                # If generator has incremented/decremented past stopping point
-                if stop is not None and ((step > 0 and value > stop) or (step < 0 and value < stop)):
-                    self._step = ValueGenerator(None)  # Stop generating
-                    value = None
-                else:
-                    self._previous = value
-
-        return value
-
-    def info(self) -> Any:
-        return {
-            'type': 'IncrementGenerator',
-            'start': self._start.info(),
-            'step': self._step.info(),
-            'stop': self._stop.info()
-        }
+            return self._string.info()
 
 
-def to_generator(value: Any) -> BaseGenerator:
+def generates(value: Any) -> Generator:
     """Convert a value into a generator if it isn't one already"""
 
-    return value if isinstance(value, BaseGenerator) else ValueGenerator(value)
+    return value if isinstance(value, Generator) else PassThrough(value)
