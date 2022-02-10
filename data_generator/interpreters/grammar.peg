@@ -1,0 +1,29 @@
+WS = (" " / "\t")
+NL = r'\r?\n'
+NWS = (NL / WS)
+SOL = r'^'
+EOL = r'$'
+
+short_string = r'.+'
+long_string_segment = "|" (short_string / "")
+long_string = long_string_segment (NL long_string_segment)*
+string = (long_string / short_string)
+
+list_item_string = NL long_string / WS* short_string WS*
+list_item = "-" list_item_string
+list = list_item (NL list_item)*
+
+item_weight = r'[0-9]+'
+weighted_list_item = item_weight list_item_string
+weighted_list = weighted_list_item (NL weighted_list_item)*
+
+ordered_list_item = "+" (NL long_string / WS* short_string WS*)
+ordered_list = ordered_list_item (NL ordered_list_item)*
+
+abstract_list = list / weighted_list / ordered_list
+
+variable_name = r'^[A-Z0-9_]+$'
+variable = abstract_list / string
+variable_declaration = variable_name NL variable
+
+root_node = NWS* variable_declaration (NL+ variable_declaration)* NWS* EOF
