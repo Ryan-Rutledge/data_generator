@@ -70,11 +70,24 @@ class ParseString:
     @classmethod
     def extract_pointers(cls, children):
         return list(filter(cls._is_randomizer, children))
+    
+    @classmethod
+    def merge_parse_strings(cls, *parse_strings):
+        format_string = cls.join_format_strings(*parse_strings)
+        pointers = cls.join_pointers(*parse_strings)
 
+        return ParseString(format_string, pointers)
+
+    @staticmethod
+    def join_format_strings(*parse_strings):
+        format_strings = [ps.format_string for ps in parse_strings]
+        return "\n".join(format_strings)
+
+    @staticmethod
+    def join_pointers(*parse_strings):
+        return reduce(lambda ps1, ps2: ps1 + ps2.pointers, parse_strings, [])
 
 class ParserVisitor(PTNodeVisitor):
-    _OUTPUT_KEY = "__OUTPUT__"
-
     def __init__(self):
         super().__init__()
 
@@ -116,16 +129,7 @@ class ParserVisitor(PTNodeVisitor):
         return children[0]
 
     def visit_long_string(self, node, children):
-        format_string = self._join_short_strings(children)
-        pointers = self._join_short_string_pointers(children)
-        return ParseString(format_string, pointers)
-
-    def _join_short_strings(self, children):
-        format_strings = [child.format_string for child in children]
-        return "\n".join(format_strings)
-
-    def _join_short_string_pointers(self, children):
-        return reduce(lambda c1, c2: c1 + c2.pointers, children, [])
+        return ParseString.merge_parse_strings(*children)
 
     def visit_string(self, node, children):
         return self._make_string_randomizer(children)
@@ -160,15 +164,12 @@ class ParserVisitor(PTNodeVisitor):
         return randomizer_name, randomizer
 
     def visit_root_node(self, node, children):
-        return self._get_output_randomizer()
-
-    def _get_output_randomizer(self):
-        return self.randomizers.get(self._OUTPUT_KEY)
-
+        return self.randomizers
 
 class GrammarInterpreter(InterpreterInterface):
     GRAMMAR_FILE = "grammar.peg"
     GRAMMAR_ROOT = "root_node"
+    _OUTPUT_KEY = "__OUTPUT__"
 
     def __init__(self, source):
         super().__init__(source)
@@ -183,9 +184,7 @@ class GrammarInterpreter(InterpreterInterface):
         filename = os.path.join(current_dir, self.GRAMMAR_FILE)
 
         with open(filename) as file:
-            grammar_text = file.read()
-
-        return grammar_text
+            return file.read()
 
     def _fetch_parser(self):
         return ParserPEG(self._grammar_text, self.GRAMMAR_ROOT, ws="")
@@ -197,4 +196,7 @@ class GrammarInterpreter(InterpreterInterface):
         return visit_parse_tree(self._parse_tree, ParserVisitor())
 
     def interpret(self):
-        return self._randomizer
+        return self._get_randomizer_output()
+    
+    def _get_randomizer_output(self):
+        return self._randomizer.get(self._OUTPUT_KEY)
