@@ -98,7 +98,7 @@ class FloatRandomizer(Randomizer):
 class FunctionRandomizer(Randomizer):
     """Generates output of an arbitrary function"""
 
-    def __init__(self, function, parameters=None):
+    def __init__(self, function, *parameters):
         super().__init__()
 
         self._function = randomizable(function)
@@ -123,20 +123,20 @@ class StringRandomizer(Randomizer):
     def __init__(self, string, *interpolators):
         super().__init__()
 
-        self._formatString = randomizable(string)
+        self._format_string = randomizable(string)
         self._interpolators = [
             randomizable(interpolator) for interpolator in interpolators
         ]
 
     def next(self, data=None):
-        formatString = self._formatString.next(data)
+        format_string = self._format_string.next(data)
         interpolators = [g.next(data) for g in self._interpolators]
-        return formatString.format(*interpolators)
+        return format_string.format(*interpolators)
 
     def info(self):
         return {
-            "format_string": self._formatString.info(),
-            "interpolators": list([f.info() for f in self._randomizers]),
+            "format_string": self._format_string.info(),
+            "interpolators": list([f.info() for f in self._interpolators]),
         }
 
 

@@ -1,48 +1,43 @@
 import sys
-import json
-import yaml
-from data_generator.interpreters.interpeter import DictInterpreter
+
+from data_generator.interpreters.grammar_interpreter import GrammarInterpreter
 
 
 class DataGenerator:
+    DEFAULT_SOURCE = "models/model.txt"
+
     def __init__(self):
-        self._getCommandlineArgs()
-        self._setRandomizerConfig()
-        self._randomizer = self._getRandomizer()
+        self._config_path, self._row_count = self._fetch_cmdline_args()
+        self._config = self._fetch_randomizer_config()
+        self._randomizer = self._fetch_randomizer()
 
-    def _getCommandlineArgs(self):
-        assert len(sys.argv) <= 4, "Too many args"
+    def _fetch_cmdline_args(self):
+        assert len(sys.argv) <= 2, "Too many args"
 
-        self._getConfigPathArg()
-        self._getRowCountArg()
-        self._getOutputFormatterArg()
+        config_path = self._fetch_config_path_arg()
+        row_count = self._fetch_row_count_arg()
 
-    def _getConfigPathArg(self):
-        self._config_path = sys.argv[1] if len(sys.argv) > 1 else "models/model.json"
+        return config_path, row_count
 
-    def _getRowCountArg(self):
-        self._row_count = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    def _fetch_config_path_arg(self):
+        return sys.argv[1] if len(sys.argv) > 1 else self.DEFAULT_SOURCE
 
-    def _getOutputFormatterArg(self):
-        output_format = sys.argv[3] if len(sys.argv) > 3 else "yaml"
-        self._output_formatter = {"yaml": yaml.dump, "json": json.dumps}[output_format]
+    def _fetch_row_count_arg(self):
+        return int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
-    def _setRandomizerConfig(self):
+    def _fetch_randomizer_config(self):
         with open(self._config_path) as config_file:
-            self._config = json.load(config_file)
+            return config_file.read()
 
-    def _getRandomizer(self):
-        return DictInterpreter(self._config).interpret()
+    def _fetch_randomizer(self):
+        return GrammarInterpreter(self._config).interpret()
 
     def generate(self):
-        for i in range(self._row_count):
-            self._generate()
+        for _ in range(self._row_count):
+            print(self._generate(), end='')
 
     def _generate(self):
-        print(self._randomizer)
-        random_data = next(self._randomizer)
-        format_data = self._output_formatter(random_data, indent=4, sort_keys=False)
-        print(format_data, end="")
+        return next(self._randomizer)
 
 
 if __name__ == "__main__":

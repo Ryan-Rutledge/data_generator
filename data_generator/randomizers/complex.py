@@ -15,37 +15,37 @@ class NameRandomizer(primitive.Randomizer):
         )
     )
 
-    def __init__(self, language="Hebrew", minSyllables=2, maxSyllables=4):
+    def __init__(self, language="Hebrew", min_syllables=2, max_syllables=4):
 
         super().__init__()
 
         assert (
-            minSyllables <= maxSyllables
+            min_syllables <= max_syllables
         ), "minimum syllable count must be less than or equal to maximum syllable count"
 
         # Create list of name generator classes
-        self._nameFactories = dict(
+        self._name_factories = dict(
             [(str(lang), None) for lang in NameGeneratorFactory.Language]
         )
 
         self._language = primitive.randomizable(language)
-        self._minSyllables = primitive.randomizable(minSyllables)
-        self._maxSyllables = primitive.randomizable(maxSyllables)
+        self._min_syllables = primitive.randomizable(min_syllables)
+        self._max_syllables = primitive.randomizable(max_syllables)
 
     def next(self, data=None):
         language = self._language.next(data)
         name_generator = self._get_language_generator(language)
-        name_generator.min_syl = self._minSyllables.next(data)
-        name_generator.max_syl = self._maxSyllables.next(data)
+        name_generator.min_syl = self._min_syllables.next(data)
+        name_generator.max_syl = self._max_syllables.next(data)
 
         return name_generator.generate_name(True)
 
     def _get_language_generator(self, language):
         # Instantiate name generator if one for that language has not been already been instantiated
-        name_generator = self._nameFactories.get(language)
+        name_generator = self._name_factories.get(language)
 
         if name_generator is None:
-            name_generator = self._nameFactories[language] = self._instantiate(
+            name_generator = self._name_factories[language] = self._instantiate(
                 language
             )
 
@@ -59,8 +59,8 @@ class NameRandomizer(primitive.Randomizer):
         return {
             "type": "NameRandomizer",
             "language": self._language.info(),
-            "min_syllables": self._minSyllables.info(),
-            "max_syllables": self._maxSyllables.info(),
+            "min_syllables": self._min_syllables.info(),
+            "max_syllables": self._max_syllables.info(),
         }
 
 
@@ -163,14 +163,14 @@ class DictFromListRandomizer(DictRandomizerInterface):
 
     def next(self, data=None) -> dict:
         self._next_dict = dict()
-        self._setDictEntries(data)
+        self._set_dict_entries(data)
         return self._next_dict
     
-    def _setDictEntries(self, data):
+    def _set_dict_entries(self, data):
         for key_randomizer, value_randomizer in self._key_values:
-            self._setDictEntry(key_randomizer, value_randomizer, data)
+            self._set_dict_entry(key_randomizer, value_randomizer, data)
     
-    def _setDictEntry(self, key_randomizer, value_randomizer, data):
+    def _set_dict_entry(self, key_randomizer, value_randomizer, data):
         key = key_randomizer.next(data)
         value = value_randomizer.next(data)
 
@@ -181,7 +181,7 @@ class DictFromListRandomizer(DictRandomizerInterface):
 class SampleRandomizer(primitive.Randomizer):
     """Random list sampler"""
 
-    def __init__(self, randomizers, min_size, max_size):
+    def __init__(self, randomizers, min_size=1, max_size=1):
         super().__init__()
         self._randomizers = randomizers
         self._min_size = primitive.randomizable(min_size)
@@ -224,14 +224,14 @@ class ChoiceRandomizer(primitive.Randomizer):
     
     def _setWeights(self, weights=None):
         if weights is None:
-            self._setDefaultWeights()
+            self._set_default_weights()
         else:
-            self._setProvidedWeights(weights)
+            self._set_provided_weights(weights)
 
-    def _setDefaultWeights(self):
+    def _set_default_weights(self):
         self._weights = [self._DEFAULT_WEIGHT] * len(self._randomizers)
     
-    def _setProvidedWeights(self, weights):
+    def _set_provided_weights(self, weights):
         self._weights = [primitive.randomizable(w) for w in weights]
 
     def next(self, data: dict = None):
@@ -248,10 +248,10 @@ class ChoiceRandomizer(primitive.Randomizer):
     def _getWeightInfo(self):
         return [
             {"weight": weight, "value": randomizer}
-            for weight, randomizer in self._getWeightRandomizerTuples()
+            for weight, randomizer in self._get_weight_randomizer_tuples()
         ]
 
-    def _getWeightRandomizerTuples(self):
+    def _get_weight_randomizer_tuples(self):
         return zip(
             [w.info() for w in self._weights],
             [g.info() for g in self._randomizers],

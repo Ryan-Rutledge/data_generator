@@ -15,9 +15,9 @@ class ConditionRandomizer(primitive.Randomizer, metaclass=ABCMeta):
     ):
 
         self._type = "ConditionRandomizer"
-        self._trueRandomizer = primitive.randomizer(on_true)
-        self._falseRandomizer = primitive.randomizer(on_false)
-        self._conditionFunctions = condition_functions or []
+        self._true_randomizer = primitive.randomizer(on_true)
+        self._false_randomizer = primitive.randomizer(on_false)
+        self._condition_functions = condition_functions or []
 
     @abstractmethod
     def next(self, data=None):
@@ -27,8 +27,8 @@ class ConditionRandomizer(primitive.Randomizer, metaclass=ABCMeta):
         return {
             "type": self._type,
             "conditions": len(self._conditions),
-            "on true": self._trueRandomizer.info(),
-            "on false": self._falseRandomizer.info(),
+            "on true": self._true_randomizer.info(),
+            "on false": self._false_randomizer.info(),
         }
 
 
@@ -40,10 +40,10 @@ class AndConditionRandomizer(ConditionRandomizer):
     def next(self, data=None):
         """Runs true generator if all conditions are met, false generator otherwise"""
 
-        randomizer = self._trueRandomizer
-        for condition in self._conditionFunctions:
+        randomizer = self._true_randomizer
+        for condition in self._condition_functions:
             if not condition(data):
-                randomizer = self._falseRandomizer
+                randomizer = self._false_randomizer
                 break
 
         return randomizer.next(data or {})
@@ -57,10 +57,10 @@ class OrConditionRandomizer(ConditionRandomizer):
     def next(self, data=None):
         """Runs true generator if any conditions are met, false generator otherwise"""
 
-        randomizer = self._falseRandomizer
-        for condition in self._conditionFunctions:
+        randomizer = self._false_randomizer
+        for condition in self._condition_functions:
             if condition(data):
-                randomizer = self._trueRandomizer
+                randomizer = self._true_randomizer
                 break
 
         return randomizer.next(data)
@@ -72,23 +72,23 @@ class RepeatRandomizer(primitive.Randomizer):
     def __init__(self, randomizer, reps):
         super().__init__()
         self._randomizer = randomizer
-        self._totalReps = primitive.randomizable(reps)
+        self._total_reps = primitive.randomizable(reps)
 
     def next(self, data=None):
         """Runs a generator a random number of times"""
 
-        total_reps = self._totalReps.next(data)
+        total_reps = self._total_reps.next(data)
 
         random_data = []
         for _ in range(total_reps):
-            random_data.append(self._randomizer.generate(data))
+            random_data.append(self._randomizer.next(data))
 
         return random_data
 
     def info(self):
         return {
             "type": "RepeaterRandomizer",
-            "reps": self._totalReps.info(),
+            "reps": self._total_reps.info(),
             "child": self._randomizer.info(),
         }
 

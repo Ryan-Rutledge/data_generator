@@ -1,11 +1,7 @@
-import re
 from abc import ABCMeta, abstractmethod
-from itertools import zip_longest
-
-from data_generator import randomizers
 
 
-class Interpreter(metaclass=ABCMeta):
+class InterpreterInterface(metaclass=ABCMeta):
     """Abstract generator interpreter for converting arbitrary information into an iterable generator"""
 
     def __init__(self, source):
