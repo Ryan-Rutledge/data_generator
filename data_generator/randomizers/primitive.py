@@ -36,6 +36,7 @@ class NoneRandomizer(Randomizer):
     def info():
         return None
 
+
 class PassThroughRandomizer(Randomizer):
     """Generates a single arbitrary value"""
 

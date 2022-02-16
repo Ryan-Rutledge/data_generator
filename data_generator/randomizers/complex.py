@@ -117,7 +117,7 @@ class DictRandomizerFactory:
             return DictRandomizer(key_values)
         else:
             return DictFromListRandomizer(key_values)
-    
+
 
 class DictRandomizerInterface(primitive.Randomizer):
     def info(self):
@@ -125,11 +125,10 @@ class DictRandomizerInterface(primitive.Randomizer):
             "type": "DictRandomizer",
             "items": self._iteminfo(),
         }
-    
+
     def _item_info(self):
-        return list(
-            [{"key": k.info(), "value": v.info()} for v, k in self._key_values]
-        )
+        return list([{"key": k.info(), "value": v.info()} for v, k in self._key_values])
+
 
 class DictRandomizer(DictRandomizerInterface):
     """ "Generates key-value pairs from a list randomizer"""
@@ -143,7 +142,7 @@ class DictRandomizer(DictRandomizerInterface):
         key_values = self._key_value_randomizer.next(data)
         non_null_key_values = filter(value is not None for _, value in key_values)
         return dict(non_null_key_values)
-    
+
     def _item_info(self):
         return self._key_value_randomizer.info()
 
@@ -165,11 +164,11 @@ class DictFromListRandomizer(DictRandomizerInterface):
         self._next_dict = dict()
         self._set_dict_entries(data)
         return self._next_dict
-    
+
     def _set_dict_entries(self, data):
         for key_randomizer, value_randomizer in self._key_values:
             self._set_dict_entry(key_randomizer, value_randomizer, data)
-    
+
     def _set_dict_entry(self, key_randomizer, value_randomizer, data):
         key = key_randomizer.next(data)
         value = value_randomizer.next(data)
@@ -221,7 +220,7 @@ class ChoiceRandomizer(primitive.Randomizer):
 
         self._randomizers = randomizers
         self._setWeights(weights)
-    
+
     def _setWeights(self, weights=None):
         if weights is None:
             self._set_default_weights()
@@ -230,7 +229,7 @@ class ChoiceRandomizer(primitive.Randomizer):
 
     def _set_default_weights(self):
         self._weights = [self._DEFAULT_WEIGHT] * len(self._randomizers)
-    
+
     def _set_provided_weights(self, weights):
         self._weights = [primitive.randomizable(w) for w in weights]
 

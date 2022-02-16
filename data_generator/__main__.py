@@ -34,7 +34,7 @@ class DataGenerator:
 
     def generate(self):
         for _ in range(self._row_count):
-            print(self._generate(), end='')
+            print(self._generate(), end="")
 
     def _generate(self):
         return next(self._randomizer)

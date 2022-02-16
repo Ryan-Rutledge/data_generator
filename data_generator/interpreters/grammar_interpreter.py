@@ -26,6 +26,7 @@ class RandomizerWrapper(Randomizer):
     def info(self):
         return self.randomizer.info()
 
+
 @dataclass
 class RandomizerPointer(Randomizer):
     """Simulates running a Randomizer by accessing a RadomizerWrapper stack"""
@@ -40,12 +41,10 @@ class RandomizerPointer(Randomizer):
 
     def _fake_next(self):
         return self.wrapper.stack[-self.steps_down_stack]
-    
+
     def info(self):
-        return {
-            'type': 'Pointer',
-            'target': self.wrapper.info()
-        }
+        return {"type": "Pointer", "target": self.wrapper.info()}
+
 
 @dataclass
 class ParseString:
@@ -68,7 +67,7 @@ class ParseString:
     @classmethod
     def extract_pointers(cls, children):
         return list(filter(cls._is_randomizer, children))
-    
+
     @classmethod
     def merge_parse_strings(cls, *parse_strings):
         format_string = cls.join_format_strings(*parse_strings)
@@ -84,6 +83,7 @@ class ParseString:
     @staticmethod
     def join_pointers(*parse_strings):
         return reduce(lambda ps1, ps2: ps1 + ps2.pointers, parse_strings, [])
+
 
 class ParserVisitor(PTNodeVisitor):
     def __init__(self):
@@ -105,7 +105,7 @@ class ParserVisitor(PTNodeVisitor):
 
     def visit_EOL(self, node, children):
         return None
-    
+
     def visit_caller(self, node, children):
         randomizer_name = children[0]
         return self._get_existing_randomizer(randomizer_name)
@@ -115,15 +115,15 @@ class ParserVisitor(PTNodeVisitor):
         randomizer = self._get_existing_randomizer(randomizer_name)
 
         return RandomizerPointer(randomizer, steps)
-    
+
     def _get_pointer_steps_and_name(self, children):
         if len(children) > 1:
             steps, name = children[0], children[1]
         else:
             steps, name = 1, children[0]
-        
+
         return steps, name
-    
+
     def _get_existing_randomizer(self, name):
         return self.randomizers[name]
 
@@ -140,7 +140,7 @@ class ParserVisitor(PTNodeVisitor):
 
     def visit_string(self, node, children):
         return self._make_string_randomizer(children)
-    
+
     def _make_string_randomizer(self, children):
         string_data = children[0]
         return StringRandomizer(string_data.format_string, *string_data.pointers)
@@ -150,18 +150,18 @@ class ParserVisitor(PTNodeVisitor):
 
     def visit_list(self, node, children):
         return ChoiceRandomizer(children)
-    
+
     def visit_rotate_list(self, node, children):
         return InfiniteRotateRandomizer(*children)
-    
+
     def visit_repeater(self, node, children):
         reps, content = children
         repeater = RepeatRandomizer(content, reps)
-        return FunctionRandomizer(''.join, repeater)
-    
+        return FunctionRandomizer("".join, repeater)
+
     def visit_integer(self, node, children):
         return int(node.value)
-    
+
     def visit_randomizer_name(self, node, children):
         return node.value
 
@@ -175,6 +175,7 @@ class ParserVisitor(PTNodeVisitor):
 
     def visit_root_node(self, node, children):
         return self.randomizers
+
 
 class GrammarInterpreter(InterpreterInterface):
     GRAMMAR_FILE = "grammar.peg"
@@ -207,6 +208,6 @@ class GrammarInterpreter(InterpreterInterface):
 
     def interpret(self):
         return self._get_randomizer_output()
-    
+
     def _get_randomizer_output(self):
         return self._randomizer.get(self._OUTPUT_KEY)
