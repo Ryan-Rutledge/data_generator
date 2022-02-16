@@ -25,6 +25,17 @@ class Randomizer(metaclass=ABCMeta):
         pass
 
 
+class NoneRandomizer(Randomizer):
+    """Generates None"""
+
+    @staticmethod
+    def next(data=None):
+        return None
+
+    @staticmethod
+    def info():
+        return None
+
 class PassThroughRandomizer(Randomizer):
     """Generates a single arbitrary value"""
 

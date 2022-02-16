@@ -96,33 +96,42 @@ class RepeatRandomizer(primitive.Randomizer):
 class RotateRandomizer(primitive.Randomizer):
     """Returns the output of one randomizer at a time, in order"""
 
-    def __init__(self, randomizers, incrementer=None):
-        if incrementer is None:
-            incrementer = complex.SequenceRandomizer(0, 1, len(randomizers) - 1)
-
-        self._incrementer = incrementer
-        self._randomizers = [primitive.randomizable(g) for g in randomizers]
+    def __init__(self, *randomizers):
+        self._randomizers = [primitive.randomizable(r) for r in randomizers]
+        self._cur_index = 0
 
     def next(self, data=None):
-        index = self._incrementer.next(data)
+        next_value = self._cur_randomizer().next(data)
+        self._increment_cur_index()
+        return next_value
 
-        if self._randomizer_exists_at_index(index):
-            return self._next_randomizer(index, data)
+    def _increment_cur_index(self):
+        self._cur_index = self._cur_index + 1
 
-        return None
+    def _cur_randomizer(self):
+        if self._randomizer_exists_at_index():
+            return self._randomizers[self._cur_index]
+        else:
+            return primitive.NoneRandomizer
 
-    def _randomizer_exists_at_index(self, index):
-        return index < len(self._randomizers) and index >= 0
+    def _randomizer_exists_at_index(self):
+        return self._cur_index < len(self._randomizers) and self._cur_index >= 0
 
-    def _next_randomizer(self, index, data):
-        randomizer = self._randomizers[index]
-        return randomizer.next(data)
+    def info(self):
+        return {"type": "RotateRandomizer", "randomizers": self._randomizers_info()}
+
+    def _randomizers_info(self):
+        return (list([r.info() for r in self._randomizers]),)
+
+
+class InfiniteRotateRandomizer(RotateRandomizer):
+    def _increment_cur_index(self):
+        self._cur_index = (self._cur_index + 1) % len(self._randomizers)
 
     def info(self):
         return {
-            "type": "RotateRandomizer",
-            "increment": self._incrementer,
-            "randomizers": list([r.info() for r in self._randomizers]),
+            "type": "InfiniteRotateRandomizer",
+            "randomizers": self._randomizers_info(),
         }
 
 

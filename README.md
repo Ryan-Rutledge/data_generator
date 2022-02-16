@@ -61,6 +61,17 @@ LIST_RANDOMIZER
 - Fourth item
 ```
 
+### RotateLists
+
+Rotate lists are sets of strings that return each item, repeating in sequence.
+
+```
+LIST_RANDOMIZER
++ First item
++ Second item
++ Third item
+```
+
 ### Callers
 
 #### Syntax: `{RANDOMIZER}`

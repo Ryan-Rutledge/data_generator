@@ -151,6 +151,9 @@ class ParserVisitor(PTNodeVisitor):
     def visit_list(self, node, children):
         return ChoiceRandomizer(children)
     
+    def visit_rotate_list(self, node, children):
+        return InfiniteRotateRandomizer(*children)
+    
     def visit_repeater(self, node, children):
         reps, content = children
         repeater = RepeatRandomizer(content, reps)
