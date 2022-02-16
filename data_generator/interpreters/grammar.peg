@@ -7,7 +7,7 @@ EOL = r'$'
 integer = r'[0-9]+'
 
 randomizer_name = r'[A-Z0-9_]+'
-pointer = "{<" randomizer_name "}"
+pointer = "{" integer? "<" randomizer_name "}"
 caller = "{" randomizer_name "}"
 
 short_string = (pointer / caller / r'[^\n]')+ / ""

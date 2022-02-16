@@ -22,9 +22,6 @@ class RandomizerWrapper(Randomizer):
         value = self.randomizer.next(data)
         self.stack.append(value)
         return value
-    
-    def has_stack(self):
-        return len(self.stack) == 0
 
     def info(self):
         return self.randomizer.info()
@@ -34,14 +31,15 @@ class RandomizerPointer(Randomizer):
     """Simulates running a Randomizer by accessing a RadomizerWrapper stack"""
 
     wrapper: RandomizerWrapper
+    steps_down_stack: int
 
     def next(self, data=None):
-        self._get_next_if_missing_stack()
-        return self.wrapper.stack[-1]
+        fake_next = self._fake_next()
+        self.wrapper.stack.append(fake_next)
+        return fake_next
 
-    def _get_next_if_missing_stack(self, data):
-        if not self.wrapper.has_stack():
-            self.wrapper.next(data)
+    def _fake_next(self):
+        return self.wrapper.stack[-self.steps_down_stack]
     
     def info(self):
         return {
@@ -113,9 +111,18 @@ class ParserVisitor(PTNodeVisitor):
         return self._get_existing_randomizer(randomizer_name)
 
     def visit_pointer(self, node, children):
-        randomizer_name = children[0]
+        steps, randomizer_name = self._get_pointer_steps_and_name(children)
         randomizer = self._get_existing_randomizer(randomizer_name)
-        return RandomizerPointer(randomizer)
+
+        return RandomizerPointer(randomizer, steps)
+    
+    def _get_pointer_steps_and_name(self, children):
+        if len(children) > 1:
+            steps, name = children[0], children[1]
+        else:
+            steps, name = 1, children[0]
+        
+        return steps, name
     
     def _get_existing_randomizer(self, name):
         return self.randomizers[name]
